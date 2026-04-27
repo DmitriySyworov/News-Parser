@@ -2,10 +2,10 @@ package article
 
 import (
 	"app/news-parser/internal/model"
+	"app/news-parser/pkg/custom_errors"
 	"app/news-parser/pkg/open_Db"
 	"context"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -19,9 +19,7 @@ type RepositoryArticle struct {
 const (
 	fieldHeader = "header"
 	fieldUrl    = "url"
-	fieldText = "text"
-
-
+	fieldText   = "text"
 )
 
 func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) *RepositoryArticle {
@@ -30,15 +28,18 @@ func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) 
 		RedisDb:    redis,
 	}
 }
-func (r *RepositoryArticle) GetAllArticlesInCategory(category string) ([]ResponseArticle, error) {
+func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, limit int) ([]ResponseCategoryToday, error) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	keys, errKeys := r.RedisDb.Client.Keys(rdbContext, "*").Result()
 	if errKeys != nil {
 		return nil, ErrLoadArticles
 	}
-	var sliceArticles []ResponseArticle
+	var sliceArticles []ResponseCategoryToday
 	for _, key := range keys {
+		if len(sliceArticles) >= limit {
+			return sliceArticles, nil
+		}
 		if strings.Contains(key, category) {
 			dataArticle, errHMGet := r.RedisDb.Client.HMGet(rdbContext, key, fieldHeader, fieldUrl).Result()
 			if errHMGet != nil {
@@ -53,10 +54,10 @@ func (r *RepositoryArticle) GetAllArticlesInCategory(category string) ([]Respons
 			if errParseId != nil {
 				return nil, ErrLoadArticles
 			}
-			sliceArticles = append(sliceArticles, ResponseArticle{
+			sliceArticles = append(sliceArticles, ResponseCategoryToday{
 				Header:    header,
 				URL:       url,
-				IdArticle: uint(id),
+				IDArticle: uint(id),
 			})
 		}
 	}
@@ -65,26 +66,48 @@ func (r *RepositoryArticle) GetAllArticlesInCategory(category string) ([]Respons
 	}
 	return sliceArticles, nil
 }
-func (r *RepositoryArticle) GetArticle(id int) (*model.Article, error) {
+func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error) {
 	idStr := fmt.Sprint(id)
 	rdbContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	keys, errKey :=r.RedisDb.Client.Keys(rdbContext, "*").Result()
+	keys, errKey := r.RedisDb.Client.Keys(rdbContext, "*").Result()
 	if errKey != nil {
 		return nil, ErrLoadArticles
 	}
-	for _, key := range keys{
-		if strings.Contains(key, idStr){
+	for _, key := range keys {
+		if strings.Contains(key, idStr) {
 			mapValue, errHGetAll := r.RedisDb.Client.HGetAll(rdbContext, key).Result()
 			if errHGetAll != nil {
-				return nil,
+				return nil, custom_errors.ErrRecordNotFound
 			}
-			return &model.Article{
-			Header: mapValue[fieldHeader],
-			URL: mapValue[fieldUrl],
-			Text: mapValue[fieldText],
-			IdArticle: uint(id),
+			return &model.ArticleToday{
+				Header:    mapValue[fieldHeader],
+				URL:       mapValue[fieldUrl],
+				Text:      mapValue[fieldText],
+				IDArticle: uint(id),
 			}, nil
 		}
 	}
+	return nil, custom_errors.ErrRecordNotFound
+}
+func (r *RepositoryArticle) GetArticlesInCategoryArchive(category string, limit int, date time.Time) ([]model.ArticleArchive, error) {
+	var archiveArticles []model.ArticleArchive
+	res := r.Where("category = ? AND date = ?", category, date).
+		Limit(limit).
+		Find(&archiveArticles)
+	if res.Error != nil || len(archiveArticles) == 0 {
+		return nil, ErrLoadArticles
+	}
+	return archiveArticles, nil
+}
+func (r *RepositoryArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, error) {
+	var articleArch model.ArticleArchive
+	res := r.Where("uuid_article = ?", uuid).First(&articleArch)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &articleArch, nil
+}
+func (r *RepositoryArticle)PopularCategories(){
+
 }
