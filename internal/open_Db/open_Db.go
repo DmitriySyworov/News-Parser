@@ -22,13 +22,13 @@ func OpenPostgres(DSN string) *PostgresDb {
 		DB: db,
 	}
 }
-func OpenRedis(redisPassword, address string)*RedisDb{
+func OpenRedis(redisPassword, address string) *RedisDb {
 	rdb := redis.NewClient(&redis.Options{
-		Addr: address,
+		Addr:     address,
 		Password: redisPassword,
-		DB: 0,
+		DB:       0,
 	})
 	return &RedisDb{
-		Client : rdb,
+		Client: rdb,
 	}
 }

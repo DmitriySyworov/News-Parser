@@ -1,8 +1,8 @@
 package article
 
 import (
+	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/model"
-	"app/news-parser/pkg/custom_errors"
 	"app/news-parser/pkg/handler_response"
 	"net/http"
 )
@@ -22,10 +22,10 @@ func NewHandlerArticle(router *http.ServeMux, dep *HandlerArticleDep) {
 	article := &HandlerArticle{
 		Dep: dep,
 	}
-	router.HandleFunc("GET /article/today/{category}", article.GetArticlesInCategoryToday())
-	router.HandleFunc("GET /article/today/{id}", article.GetArticleToday())
-	router.HandleFunc("GET /article/archive/{category}", article.GetArticlesInCategoryArchive())
-	router.HandleFunc("GET /article/archive/{uuid}", article.GetArchiveArticle())
+	router.HandleFunc("GET /article/today/{category}", article.GetArticlesInCategoryToday()) ///{category}", article.GetArticlesInCategoryToday())
+	router.HandleFunc("GET /article/today/text/{id}", article.GetArticleToday())
+	router.HandleFunc("GET /article/archive/{category}", article.GetArticlesInCategoryArchive()) ///{category}", article.GetArticlesInCategoryArchive())
+	router.HandleFunc("GET /article/archive/text/{uuid}", article.GetArchiveArticle())
 
 }
 func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
@@ -72,17 +72,12 @@ func (h *HandlerArticle) GetArticleToday() http.HandlerFunc {
 func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		category := request.PathValue("category")
-		if category != food && category != politics && category != sport && category != cloth && category != business && category != electronics {
-			h.ResponseCategoryToday.Error = ErrCategory.Error()
-			handler_response.HandlerResponse(writer, h.ResponseCategoryArchive, http.StatusBadRequest)
-			return
-		}
 		limitStr := request.URL.Query().Get("limit")
 		dateStr := request.URL.Query().Get("date")
 		articlesArchive, errGetArchive := h.Dep.ServiceArticle.GetArticlesInCategoryArchive(category, limitStr, dateStr)
 		if errGetArchive != nil {
 			switch errGetArchive {
-			case ErrIncorrectLimit, ErrIncorrectDate:
+			case ErrIncorrectLimit, custom_errors.ErrIncorrectDate:
 				handler_response.HandlerResponse(writer, h.ResponseCategoryArchive, http.StatusBadRequest)
 			case ErrLoadArticles:
 				handler_response.HandlerResponse(writer, h.ResponseCategoryArchive, http.StatusInternalServerError)

@@ -1,14 +1,21 @@
 package article
 
 import (
+	"app/news-parser/internal/common"
+	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/model"
-	"app/news-parser/pkg/custom_errors"
-	"app/news-parser/pkg/open_Db"
+	"app/news-parser/internal/open_Db"
+	"app/news-parser/pkg/generate_random"
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type RepositoryArticle struct {
@@ -20,6 +27,8 @@ const (
 	fieldHeader = "header"
 	fieldUrl    = "url"
 	fieldText   = "text"
+
+	linkList = "LinkList"
 )
 
 func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) *RepositoryArticle {
@@ -29,7 +38,7 @@ func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) 
 	}
 }
 func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, limit int) ([]ResponseCategoryToday, error) {
-	rdbContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
 	keys, errKeys := r.RedisDb.Client.Keys(rdbContext, "*").Result()
 	if errKeys != nil {
@@ -68,7 +77,7 @@ func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, limit in
 }
 func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error) {
 	idStr := fmt.Sprint(id)
-	rdbContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
 	keys, errKey := r.RedisDb.Client.Keys(rdbContext, "*").Result()
 	if errKey != nil {
@@ -108,6 +117,85 @@ func (r *RepositoryArticle) GetArchiveArticle(uuid string) (*model.ArticleArchiv
 	}
 	return &articleArch, nil
 }
-func (r *RepositoryArticle)PopularCategories(){
-
+func (r *RepositoryArticle) CreateArchiveArticle(article *model.ArticleArchive) error {
+	res := r.PostgresDb.Create(&article)
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
+}
+func (r *RepositoryArticle) isRedisArticleExist() bool {
+	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
+	defer cancel()
+	keys, errKey := r.RedisDb.Keys(rdbContext, "*").Result()
+	if errKey != nil {
+		return false
+	}
+	for _, key := range keys {
+		for _, category := range StorageCategories {
+			if strings.Contains(key, category) {
+				return true
+			}
+		}
+	}
+	return false
+}
+func (r *RepositoryArticle) allArticlesRedis() ([]model.ArticleArchive, error) {
+	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
+	defer cancel()
+	keys, errKey := r.RedisDb.Keys(rdbContext, "*").Result()
+	if errKey != nil {
+		return nil, errKey
+	}
+	var sliceArticles []model.ArticleArchive
+	for _, key := range keys {
+		for _, category := range StorageCategories {
+			if strings.Contains(key, category) {
+				mapValue, errHGetAll := r.RedisDb.HGetAll(rdbContext, key).Result()
+				if errHGetAll != nil {
+					log.Println(errHGetAll)
+				}
+				sliceArticles = append(sliceArticles, model.ArticleArchive{
+					Header:      mapValue[fieldHeader],
+					URL:         mapValue[fieldUrl],
+					Text:        mapValue[fieldText],
+					Category:    category,
+					Date:        common.DateNow(),
+					UUIDArticle: uuid.New().String(),
+				})
+			}
+		}
+	}
+	if len(sliceArticles) == 0 {
+		return nil, errors.New("failed to get all the articles")
+	}
+	return sliceArticles, nil
+}
+func (r *RepositoryArticle) loadLinkList() ([]string, error) {
+	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
+	defer cancel()
+	list, errGetList := r.RedisDb.LRange(rdbContext, linkList, 0, -1).Result()
+	if errGetList != nil || len(list) == 0 {
+		return nil, errors.New("failed to load LinkList")
+	}
+	return list, nil
+}
+func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
+	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
+	defer cancel()
+	_, errTrans := r.Client.TxPipelined(rdbContext, func(pipeliner redis.Pipeliner) error {
+		key := fmt.Sprint(art.Category, ":", generate_random.GenerateNumbers(7))
+		errHSet := r.RedisDb.HSet(rdbContext, key, "header", art.Header, "url", art.Url, "text", art.Text, "is_article", art.IsArticle).Err()
+		if errHSet != nil {
+			return errHSet
+		}
+		errExp := r.RedisDb.Expire(rdbContext, key, 24*time.Hour).Err()
+		if errExp != nil {
+			return errExp
+		}
+		return nil
+	})
+	if errTrans != nil {
+		fmt.Println(errTrans)
+	}
 }

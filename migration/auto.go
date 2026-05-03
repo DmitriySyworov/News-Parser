@@ -2,7 +2,7 @@ package main
 
 import (
 	"app/news-parser/internal/model"
-	"app/news-parser/pkg/open_Db"
+	"app/news-parser/internal/open_Db"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -14,7 +14,7 @@ func main() {
 		panic(errEnv)
 	}
 	db := open_Db.OpenPostgres(os.Getenv("DSN"))
-	errMigrate := db.AutoMigrate(&model.ArticleArchive{})
+	errMigrate := db.AutoMigrate(&model.ArticleArchive{}, &model.CategoryStat{}, &model.ArticleStat{})
 	if errMigrate != nil {
 		panic(errMigrate)
 	}

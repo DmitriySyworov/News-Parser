@@ -4,13 +4,19 @@ type Event struct {
 	Name string
 	Data any
 }
-type Bus struct {
-	EventBus chan Event
+
+type EventBus struct {
+	Bus chan Event
 }
 
-func (b *Bus) Publisher(event Event) {
-	b.EventBus <- event
+func NewEventBus() *EventBus {
+	return &EventBus{
+		Bus: make(chan Event),
+	}
 }
-func (b *Bus) Subscriber() chan Event {
-	return b.EventBus
+func (e *EventBus) Publisher(event *Event) {
+	e.Bus <- *event
+}
+func (e *EventBus) Subscriber() <-chan Event {
+	return e.Bus
 }

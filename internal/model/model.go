@@ -3,9 +3,9 @@ package model
 import "time"
 
 type ArticleArchive struct {
-	Header      string    `gorm:"not null"`
-	URL         string    `gorm:"not null"`
-	Text        string    `gorm:"not null"`
+	Header      string `gorm:"not null"`
+	URL         string `gorm:"not null"`
+	Text        string
 	Category    string    `gorm:"not null"`
 	Date        time.Time `gorm:"not null"`
 	UUIDArticle string    `gorm:"unique,not null"`
@@ -18,4 +18,14 @@ type ArticleToday struct {
 	Category  string
 	IDArticle uint
 	Error     string
+}
+type CategoryStat struct {
+	Category string `gorm:"not null"`
+	Click    uint
+	Date     time.Time `gorm:"not null"`
+}
+type ArticleStat struct {
+	URL   string `gorm:"not null"`
+	Click uint
+	Date  time.Time `gorm:"not null"`
 }
