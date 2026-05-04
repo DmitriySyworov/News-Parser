@@ -72,7 +72,7 @@ func (p *Parse) ParseArticle(category string) {
 		for _, cond := range ConditionArticles {
 			select {
 			case <-ticker.C:
-				log.Println("время на запись текста ситекло")
+				log.Println("время на запись текста истекло")
 				art.Text = "-"
 				p.ArticleCh <- art
 			default:

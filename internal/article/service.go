@@ -41,7 +41,7 @@ func NewServiceArticle(repoArticle *RepositoryArticle, dep *ServiceArticleDep) *
 		ServiceArticleDep: dep,
 	}
 }
-func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr string) ([]ResponseCategoryToday, error) {
+func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr, filter string) ([]ResponseCategoryToday, error) {
 	if !validateCategories(category) {
 		return nil, ErrCategory
 	}
@@ -49,7 +49,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr string) (
 	if errParseLimit != nil {
 		return nil, ErrIncorrectLimit
 	}
-	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, limit)
+	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, filter, limit)
 	if errGetAllArticle != nil {
 		return nil, errGetAllArticle
 	}

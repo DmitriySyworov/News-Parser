@@ -123,6 +123,7 @@ func (s *ServiceStat) PushInStat() {
 				if !ok {
 					log.Println("failed to assertion type article, got: ", url)
 				}
+				s.Repo.addClickArticle(url)
 			}
 		}
 	}

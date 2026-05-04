@@ -24,9 +24,10 @@ type RepositoryArticle struct {
 }
 
 const (
-	fieldHeader = "header"
-	fieldUrl    = "url"
-	fieldText   = "text"
+	fieldHeader    = "header"
+	fieldUrl       = "url"
+	fieldText      = "text"
+	fieldIsArticle = "is_article"
 
 	linkList = "LinkList"
 )
@@ -37,7 +38,7 @@ func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) 
 		RedisDb:    redis,
 	}
 }
-func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, limit int) ([]ResponseCategoryToday, error) {
+func (r *RepositoryArticle) GetArticlesInCategoryToday(category, filter string, limit int) ([]ResponseCategoryToday, error) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
 	keys, errKeys := r.RedisDb.Client.Keys(rdbContext, "*").Result()
@@ -50,24 +51,51 @@ func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, limit in
 			return sliceArticles, nil
 		}
 		if strings.Contains(key, category) {
-			dataArticle, errHMGet := r.RedisDb.Client.HMGet(rdbContext, key, fieldHeader, fieldUrl).Result()
+			dataArticle, errHMGet := r.RedisDb.Client.HMGet(rdbContext, key, fieldHeader, fieldUrl, fieldIsArticle).Result()
 			if errHMGet != nil {
 				return nil, ErrLoadArticles
 			}
-			header, okHeader := dataArticle[0].(string)
-			url, okUrl := dataArticle[1].(string)
-			if !okHeader || !okUrl {
-				return nil, ErrLoadArticles
+			if dataArticle[2] == "1" && filter == "true" {
+				header, okHeader := dataArticle[0].(string)
+				url, okUrl := dataArticle[1].(string)
+				if !okHeader || !okUrl {
+					return nil, ErrLoadArticles
+				}
+				id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
+				if errParseId != nil {
+					return nil, ErrLoadArticles
+				}
+				isArticle := false
+				if dataArticle[2] == "1" {
+					isArticle = true
+				}
+				sliceArticles = append(sliceArticles, ResponseCategoryToday{
+					Header:    header,
+					URL:       url,
+					IDArticle: uint(id),
+					IsArticle: isArticle,
+				})
+			} else if dataArticle[2] == "0" && filter == "false" {
+				header, okHeader := dataArticle[0].(string)
+				url, okUrl := dataArticle[1].(string)
+				if !okHeader || !okUrl {
+					return nil, ErrLoadArticles
+				}
+				id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
+				if errParseId != nil {
+					return nil, ErrLoadArticles
+				}
+				isArticle := false
+				if dataArticle[2] == "1" {
+					isArticle = true
+				}
+				sliceArticles = append(sliceArticles, ResponseCategoryToday{
+					Header:    header,
+					URL:       url,
+					IDArticle: uint(id),
+					IsArticle: isArticle,
+				})
 			}
-			id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
-			if errParseId != nil {
-				return nil, ErrLoadArticles
-			}
-			sliceArticles = append(sliceArticles, ResponseCategoryToday{
-				Header:    header,
-				URL:       url,
-				IDArticle: uint(id),
-			})
 		}
 	}
 	if len(sliceArticles) == 0 {

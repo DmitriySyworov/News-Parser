@@ -3,6 +3,7 @@ package article
 type ResponseCategoryToday struct {
 	Header    string
 	URL       string
+	IsArticle bool
 	IDArticle uint
 	Error     string
 }

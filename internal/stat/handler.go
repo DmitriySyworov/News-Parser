@@ -42,7 +42,7 @@ func (h *HandlerStat) GetStatCategoryByDate() http.HandlerFunc {
 			case custom_errors.ErrIncorrectDate:
 				handler_response.HandlerResponse(writer, h.ResponseStatCategoryDate, http.StatusBadRequest)
 			case ErrStatLoad:
-				handler_response.HandlerResponse(writer, h.ResponseStatCategoryDate, http.StatusInternalServerError)
+				handler_response.HandlerResponse(writer, h.ResponseStatCategoryDate, http.StatusNotFound)
 			}
 			return
 		}
@@ -75,7 +75,7 @@ func (h *HandlerStat) GetStatArticleByDate() http.HandlerFunc {
 			case custom_errors.ErrIncorrectDate:
 				handler_response.HandlerResponse(writer, h.ResponseStatArticleDate, http.StatusBadRequest)
 			case ErrStatLoad:
-				handler_response.HandlerResponse(writer, h.ResponseStatArticleDate, http.StatusInternalServerError)
+				handler_response.HandlerResponse(writer, h.ResponseStatArticleDate, http.StatusNotFound)
 			}
 			return
 		}
