@@ -12,3 +12,9 @@ type IRepoStat interface {
 	CreateStatCategory(*model.CategoryStat) error
 	CreateStatArticle(statArticle *model.ArticleStat) error
 }
+type IRepoUser interface {
+	IsUserExist(name, email string) error
+	CreateUser(*model.User) error
+	GetUserByEmail(string) (*model.User, error)
+	GetUserByUUID(string) (*model.User, error)
+}

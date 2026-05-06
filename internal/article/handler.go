@@ -2,7 +2,9 @@ package article
 
 import (
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/middleware"
 	"app/news-parser/internal/model"
+	"app/news-parser/pkg/handler_request"
 	"app/news-parser/pkg/handler_response"
 	"net/http"
 )
@@ -10,12 +12,14 @@ import (
 type HandlerArticle struct {
 	model.ArticleArchive
 	model.ArticleToday
+	ResponseCreateArticle
 	ResponseCategoryToday
 	ResponseCategoryArchive
 	Dep *HandlerArticleDep
 }
 type HandlerArticleDep struct {
 	*ServiceArticle
+	*middleware.ManagerMiddleware
 }
 
 func NewHandlerArticle(router *http.ServeMux, dep *HandlerArticleDep) {
@@ -26,11 +30,11 @@ func NewHandlerArticle(router *http.ServeMux, dep *HandlerArticleDep) {
 	router.HandleFunc("GET /article/today/text/{id}", article.GetArticleToday())
 	router.HandleFunc("GET /article/archive/{category}", article.GetArticlesInCategoryArchive())
 	router.HandleFunc("GET /article/archive/text/{uuid}", article.GetArchiveArticle())
-	router.HandleFunc("POST /my/add/article/{category}", article.CreateUserArticles())    //auth
-	router.HandleFunc("PATCH /my/update/article/{category}", article.UpdateUserArticle()) //auth
-	router.HandleFunc("DELETE /my/delete/article/{id}", article.DeleteUserArticle)
-	router.HandleFunc("GET /my/article/{category}", article.GetUserArticlesInCategory()) //auth
-	router.HandleFunc("GET /my/article/text/{id}", article.GetUserArticle())             //auth
+	router.Handle("POST /my/add/article", dep.IsAuthJWT(article.CreateUserArticles())) //auth
+	//router.HandleFunc("PATCH /my/update/article/{category}", article.UpdateUserArticle()) //auth
+	//router.HandleFunc("DELETE /my/delete/article/{id}", article.DeleteUserArticle)
+	//router.HandleFunc("GET /my/article/{category}", article.GetUserArticlesInCategory()) //auth
+	//router.HandleFunc("GET /my/article/text/{id}", article.GetUserArticle())             //auth
 
 }
 func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
@@ -112,5 +116,50 @@ func (h *HandlerArticle) GetArchiveArticle() http.HandlerFunc {
 			return
 		}
 		handler_response.HandlerResponse(writer, archArticle, http.StatusOK)
+	}
+}
+func (h *HandlerArticle) CreateUserArticles() http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		valueCtx := request.Context().Value(middleware.KeyAuthToken)
+		userUUID, ok := valueCtx.(string)
+		if !ok {
+			h.ResponseCreateArticle.Error = custom_errors.ErrIncorrectToken.Error()
+			handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnauthorized)
+			return
+		}
+		addText := request.URL.Query().Get("addText")
+		var isAddText bool
+		if addText == "false" {
+			isAddText = false
+		} else if addText == "true" {
+			isAddText = true
+		} else {
+			h.ResponseCreateArticle.Error = custom_errors.ErrIncorrectAction.Error()
+			handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusBadRequest)
+			return
+		}
+		body, errRequest := handler_request.HandlerRequest[RequestCreateArticle](request)
+		if errRequest != nil {
+			h.ResponseCreateArticle.Error = errRequest.Error()
+			switch errRequest {
+			case handler_request.ErrIncorrectFormat:
+				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusBadRequest)
+			case handler_request.ErrInvalidData:
+				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnprocessableEntity)
+			}
+			return
+		}
+		sliceUserArticles, errCreateUserArt := h.Dep.CreateUserArticles(body, userUUID, isAddText)
+		if errCreateUserArt != nil {
+			h.ResponseCreateArticle.Error = errCreateUserArt.Error()
+			switch errCreateUserArt {
+			case custom_errors.ErrUserNotFound:
+				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnauthorized)
+			case ErrFailedToParse:
+				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnprocessableEntity)
+			}
+			return
+		}
+		handler_response.HandlerResponse(writer, sliceUserArticles, http.StatusMultiStatus)
 	}
 }

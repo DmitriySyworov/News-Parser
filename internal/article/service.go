@@ -20,6 +20,7 @@ type ServiceArticle struct {
 type ServiceArticleDep struct {
 	*event_bus.EventBus
 	di.IRepoStat
+	di.IRepoUser
 }
 
 const (
@@ -116,6 +117,36 @@ func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, 
 	})
 	return archArticle, nil
 }
+func (s *ServiceArticle) CreateUserArticles(body *RequestCreateArticle, uuid string, isAddText bool) (*ResponseCreateArticle, error) {
+	if _, errNotFound := s.IRepoUser.GetUserByUUID(uuid); errNotFound != nil {
+		return nil, custom_errors.ErrUserNotFound
+	}
+	var sliceUserArticle []model.UserArticle
+	var wg sync.WaitGroup
+	customParsing := NewCustomParsing(&wg, s.repo)
+	if isAddText {
+		wg.Add(3)
+		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
+		go customParsing.CustomParseArticle()
+		go customParsing.createUserArticlesWithText()
+		defer wg.Wait()
+		for customLink := range customParsing.LinkUserCh {
+			sliceUserArticle = append(sliceUserArticle, customLink)
+		}
+	} else {
+		wg.Add(2)
+		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
+		go customParsing.createUserArticlesWithoutText()
+		defer wg.Wait()
+		for customArticle := range customParsing.ArticleUserCh {
+			sliceUserArticle = append(sliceUserArticle, customArticle)
+		}
+	}
+	if len(sliceUserArticle) == 0 {
+		return nil, ErrFailedToParse
+	}
+	return &ResponseCreateArticle{UserArticles: sliceUserArticle}, nil
+}
 func validateCategories(category string) bool {
 	for _, c := range StorageCategories {
 		if category == c {
@@ -209,9 +240,9 @@ func (s *ServiceArticle) loadNewInfo() {
 		var wg sync.WaitGroup
 		parse := NewParsing(&wg, s.repo)
 		wg.Add(3 * len(linksList))
-		go parse.ParseCategory(data[0], data[1])
-		go parse.ParseArticle(data[1])
-		go parse.CreateRdb(data[1])
+		go parse.parseCategory(data[0], data[1])
+		go parse.parseArticle(data[1])
+		go parse.createRdb(data[1])
 		defer func() {
 			wg.Wait()
 		}()

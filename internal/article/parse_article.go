@@ -48,7 +48,7 @@ var ConditionArticles = []struct {
 	//	{Domain: "https://meduza.io", StartWord: "ВОЙТИ", StopWord: "Телеграм", OpenEndpoints: []string{"feature", "news"}},
 }
 
-func (p *Parse) CreateRdb(category string) {
+func (p *Parse) createRdb(category string) {
 	for art := range p.ArticleCh {
 		if art.Error != nil {
 			log.Println(art.Error)
@@ -60,7 +60,7 @@ func (p *Parse) CreateRdb(category string) {
 	}
 	p.WG.Done()
 }
-func (p *Parse) ParseArticle(category string) {
+func (p *Parse) parseArticle(category string) {
 	path, _ := launcher.New().Headless(true).Launch()
 	browser := rod.New().ControlURL(path).MustConnect()
 	for art := range p.LinkCh {
@@ -112,7 +112,7 @@ func (p *Parse) ParseArticle(category string) {
 	close(p.ArticleCh)
 	p.WG.Done()
 }
-func (p *Parse) ParseCategory(url, category string) {
+func (p *Parse) parseCategory(url, category string) {
 	for _, cond := range ConditionArticles {
 		if strings.Contains(url, cond.Domain) {
 			response, errResp := http.Get(url)

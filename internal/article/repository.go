@@ -227,3 +227,10 @@ func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
 		fmt.Println(errTrans)
 	}
 }
+func (r *RepositoryArticle)createUserNewArticle(art *model.UserArticle)error{
+	res := r.PostgresDb.Create(&art)
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
+}
