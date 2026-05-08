@@ -25,6 +25,7 @@ type User struct {
 	UserArticle []UserArticle `gorm:"foreignKey:UUIDUser;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }
 type UserArticle struct {
+	*gorm.Model
 	Header    string
 	URL       string
 	Text      string

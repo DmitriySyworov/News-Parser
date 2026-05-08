@@ -12,9 +12,11 @@ import (
 type HandlerArticle struct {
 	model.ArticleArchive
 	model.ArticleToday
-	ResponseCreateArticle
+	model.UserArticle
+	ResponseUserArticles
 	ResponseCategoryToday
 	ResponseCategoryArchive
+	ResponseUserDelete
 	Dep *HandlerArticleDep
 }
 type HandlerArticleDep struct {
@@ -30,11 +32,11 @@ func NewHandlerArticle(router *http.ServeMux, dep *HandlerArticleDep) {
 	router.HandleFunc("GET /article/today/text/{id}", article.GetArticleToday())
 	router.HandleFunc("GET /article/archive/{category}", article.GetArticlesInCategoryArchive())
 	router.HandleFunc("GET /article/archive/text/{uuid}", article.GetArchiveArticle())
-	router.Handle("POST /my/add/article", dep.IsAuthJWT(article.CreateUserArticles())) //auth
-	//router.HandleFunc("PATCH /my/update/article/{category}", article.UpdateUserArticle()) //auth
-	//router.HandleFunc("DELETE /my/delete/article/{id}", article.DeleteUserArticle)
-	//router.HandleFunc("GET /my/article/{category}", article.GetUserArticlesInCategory()) //auth
-	//router.HandleFunc("GET /my/article/text/{id}", article.GetUserArticle())             //auth
+	router.Handle("POST /my/add/article", dep.IsAuthJWT(article.CreateUserArticles()))
+	//router.HandleFunc("PATCH /my/update/article/{category}", article.UpdateUserArticle())
+	router.Handle("DELETE /my/delete/article/{id}", dep.IsAuthJWT(article.DeleteUserArticle()))
+	router.Handle("GET /my/article/{category}", dep.IsAuthJWT(article.GetAllUserArticles()))
+	router.Handle("GET /my/article/text/{id}", dep.IsAuthJWT(article.GetUserArticle()))
 
 }
 func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
@@ -53,7 +55,7 @@ func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
 			switch errGetAllArticle {
 			case ErrLoadArticles:
 				handler_response.HandlerResponse(writer, h.ResponseCategoryToday, http.StatusInternalServerError)
-			case ErrIncorrectLimit, ErrCategory:
+			case ErrIncorrectParams, ErrCategory:
 				handler_response.HandlerResponse(writer, h.ResponseCategoryToday, http.StatusBadRequest)
 			}
 			return
@@ -87,12 +89,13 @@ func (h *HandlerArticle) GetArticleToday() http.HandlerFunc {
 func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		category := request.PathValue("category")
+		offsetStr := request.URL.Query().Get("offset")
 		limitStr := request.URL.Query().Get("limit")
 		dateStr := request.URL.Query().Get("date")
-		articlesArchive, errGetArchive := h.Dep.ServiceArticle.GetArticlesInCategoryArchive(category, limitStr, dateStr)
+		articlesArchive, errGetArchive := h.Dep.ServiceArticle.GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr)
 		if errGetArchive != nil {
 			switch errGetArchive {
-			case ErrIncorrectLimit, custom_errors.ErrIncorrectDate:
+			case ErrIncorrectParams, custom_errors.ErrIncorrectDate:
 				handler_response.HandlerResponse(writer, h.ResponseCategoryArchive, http.StatusBadRequest)
 			case ErrLoadArticles:
 				handler_response.HandlerResponse(writer, h.ResponseCategoryArchive, http.StatusInternalServerError)
@@ -123,8 +126,8 @@ func (h *HandlerArticle) CreateUserArticles() http.HandlerFunc {
 		valueCtx := request.Context().Value(middleware.KeyAuthToken)
 		userUUID, ok := valueCtx.(string)
 		if !ok {
-			h.ResponseCreateArticle.Error = custom_errors.ErrIncorrectToken.Error()
-			handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnauthorized)
+			h.ResponseUserArticles.Error = custom_errors.ErrIncorrectToken.Error()
+			handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusUnauthorized)
 			return
 		}
 		addText := request.URL.Query().Get("addText")
@@ -134,32 +137,109 @@ func (h *HandlerArticle) CreateUserArticles() http.HandlerFunc {
 		} else if addText == "true" {
 			isAddText = true
 		} else {
-			h.ResponseCreateArticle.Error = custom_errors.ErrIncorrectAction.Error()
-			handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusBadRequest)
+			h.ResponseUserArticles.Error = custom_errors.ErrIncorrectAction.Error()
+			handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusBadRequest)
 			return
 		}
 		body, errRequest := handler_request.HandlerRequest[RequestCreateArticle](request)
 		if errRequest != nil {
-			h.ResponseCreateArticle.Error = errRequest.Error()
+			h.ResponseUserArticles.Error = errRequest.Error()
 			switch errRequest {
 			case handler_request.ErrIncorrectFormat:
-				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusBadRequest)
+				handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusBadRequest)
 			case handler_request.ErrInvalidData:
-				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnprocessableEntity)
+				handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusUnprocessableEntity)
 			}
 			return
 		}
 		sliceUserArticles, errCreateUserArt := h.Dep.CreateUserArticles(body, userUUID, isAddText)
 		if errCreateUserArt != nil {
-			h.ResponseCreateArticle.Error = errCreateUserArt.Error()
+			h.ResponseUserArticles.Error = errCreateUserArt.Error()
 			switch errCreateUserArt {
 			case custom_errors.ErrUserNotFound:
-				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnauthorized)
+				handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusUnauthorized)
 			case ErrFailedToParse:
-				handler_response.HandlerResponse(writer, h.ResponseCreateArticle, http.StatusUnprocessableEntity)
+				handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusUnprocessableEntity)
 			}
 			return
 		}
 		handler_response.HandlerResponse(writer, sliceUserArticles, http.StatusMultiStatus)
+	}
+}
+func (h *HandlerArticle) DeleteUserArticle() http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		valueCtx := request.Context().Value(middleware.KeyAuthToken)
+		userUUID, ok := valueCtx.(string)
+		if !ok {
+			h.ResponseUserArticles.Error = custom_errors.ErrIncorrectToken.Error()
+			handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusUnauthorized)
+			return
+		}
+		idArticle := request.PathValue("id")
+		allArticleStr := request.URL.Query().Get("allArticle")
+		if (idArticle == "" || len(idArticle) != 11) && (allArticleStr != "true" && allArticleStr != "false") {
+			h.ResponseUserDelete.Error = ErrIncorrectParams.Error()
+			handler_response.HandlerResponse(writer, h.ResponseUserDelete, http.StatusBadRequest)
+			return
+		}
+		errDeleteUserArt := h.Dep.DeleteUserArticle(idArticle, userUUID, idArticle)
+		if errDeleteUserArt != nil {
+			h.ResponseUserDelete.Error = errDeleteUserArt.Error()
+			switch errDeleteUserArt {
+			case custom_errors.ErrUserNotFound:
+				handler_response.HandlerResponse(writer, h.ResponseUserDelete, http.StatusNotFound)
+			case ErrIncorrectId:
+				handler_response.HandlerResponse(writer, h.ResponseUserDelete, http.StatusBadRequest)
+			}
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}
+}
+func (h *HandlerArticle) GetUserArticle() http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		idArticleStr := request.PathValue("id")
+		if idArticleStr == "" {
+			h.UserArticle.Error = ErrIncorrectParams.Error()
+			handler_response.HandlerResponse(writer, h.UserArticle, http.StatusBadRequest)
+			return
+		}
+		userArticle, errGetUserArt := h.Dep.GetUserArticle(idArticleStr)
+		if errGetUserArt != nil {
+			h.UserArticle.Error = errGetUserArt.Error()
+			switch errGetUserArt {
+			case ErrIncorrectId:
+				handler_response.HandlerResponse(writer, h.UserArticle, http.StatusBadRequest)
+			case custom_errors.ErrRecordNotFound:
+				handler_response.HandlerResponse(writer, h.UserArticle, http.StatusNotFound)
+			}
+			return
+		}
+		handler_response.HandlerResponse(writer, userArticle, http.StatusOK)
+	}
+}
+func (h *HandlerArticle) GetAllUserArticles() http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		category := request.PathValue("category")
+		offset := request.URL.Query().Get("offset")
+		limit := request.URL.Query().Get("limit")
+		withText := request.URL.Query().Get("withText")
+		if category == "" && offset == "" && limit == "" && withText == "" {
+			h.ResponseUserArticles.Error = ErrIncorrectParams.Error()
+			handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusBadRequest)
+			return
+		}
+		respUserArticles, errGetArticles := h.Dep.GetAllUserArticles(category, offset, limit, withText)
+		if errGetArticles != nil {
+			h.ResponseUserArticles.Error = errGetArticles.Error()
+			switch errGetArticles {
+			case ErrIncorrectParams:
+				handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusBadRequest)
+			case custom_errors.ErrRecordNotFound:
+				handler_response.HandlerResponse(writer, h.ResponseUserArticles, http.StatusNotFound)
+			}
+			return
+		}
+		handler_response.HandlerResponse(writer, respUserArticles, http.StatusOK)
 	}
 }

@@ -127,9 +127,10 @@ func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error)
 	}
 	return nil, custom_errors.ErrRecordNotFound
 }
-func (r *RepositoryArticle) GetArticlesInCategoryArchive(category string, limit int, date time.Time) ([]model.ArticleArchive, error) {
+func (r *RepositoryArticle) GetArticlesInCategoryArchive(category string, offset, limit int, date time.Time) ([]model.ArticleArchive, error) {
 	var archiveArticles []model.ArticleArchive
 	res := r.Where("category = ? AND date = ?", category, date).
+		Offset(offset).
 		Limit(limit).
 		Find(&archiveArticles)
 	if res.Error != nil || len(archiveArticles) == 0 {
@@ -167,6 +168,90 @@ func (r *RepositoryArticle) isRedisArticleExist() bool {
 		}
 	}
 	return false
+}
+func (r *RepositoryArticle) GetUserArticle(idArticle uint) (*model.UserArticle, error) {
+	var userArticle model.UserArticle
+	res := r.PostgresDb.Where("id_article = ?", idArticle).First(&userArticle)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &userArticle, nil
+}
+func (r *RepositoryArticle) DeleteAllUserArticle(uuidUser string) error {
+	res := r.PostgresDb.Where("uuid_user = ?", uuidUser).Delete(&model.UserArticle{})
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
+}
+func (r *RepositoryArticle) GetAllUserArticlesWithoutText(category string, offset, limit int) (*ResponseUserArticles, error) {
+	var sliceUserArticle []model.UserArticle
+	if category == "" {
+		res := r.PostgresDb.
+			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
+					OFFSET ?
+					LIMIT ?
+`, offset, limit).
+			Find(&sliceUserArticle)
+		if res.Error != nil {
+			return nil, res.Error
+		}
+	} else {
+		res := r.PostgresDb.
+			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
+                    WHERE  category = ?
+					OFFSET ?
+					LIMIT ?
+`, category, offset, limit).
+			Find(&sliceUserArticle)
+		if res.Error != nil {
+			return nil, res.Error
+		}
+	}
+	if len(sliceUserArticle) == 0 {
+		return nil, custom_errors.ErrUserNotFound
+	}
+	return &ResponseUserArticles{
+		SliceUserArticles: sliceUserArticle,
+	}, nil
+}
+func (r *RepositoryArticle) GetAllUserArticlesWithText(category string, offset, limit int) (*ResponseUserArticles, error) {
+	var sliceUserArticle []model.UserArticle
+	if category == "" {
+		res := r.PostgresDb.
+			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
+					OFFSET ?
+					LIMIT ?
+`, category, offset, limit).
+			Find(&sliceUserArticle)
+		if res.Error != nil {
+			return nil, res.Error
+		}
+	} else {
+		res := r.PostgresDb.
+			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
+                    WHERE  category = ?
+					OFFSET ?
+					LIMIT ?
+`, category, offset, limit).
+			Find(&sliceUserArticle)
+		if res.Error != nil {
+			return nil, res.Error
+		}
+	}
+	if len(sliceUserArticle) == 0 {
+		return nil, custom_errors.ErrUserNotFound
+	}
+	return &ResponseUserArticles{
+		SliceUserArticles: sliceUserArticle,
+	}, nil
+}
+func (r *RepositoryArticle) DeleteUserArticleByID(idArticle uint) error {
+	res := r.PostgresDb.Where("id_article = ?", idArticle).Delete(&model.UserArticle{})
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
 }
 func (r *RepositoryArticle) allArticlesRedis() ([]model.ArticleArchive, error) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
@@ -227,10 +312,27 @@ func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
 		fmt.Println(errTrans)
 	}
 }
-func (r *RepositoryArticle)createUserNewArticle(art *model.UserArticle)error{
+func (r *RepositoryArticle) createUserNewArticle(art *model.UserArticle) error {
 	res := r.PostgresDb.Create(&art)
 	if res.Error != nil {
 		return res.Error
 	}
 	return nil
+}
+type idArticlesSlice struct{
+	IdArticle uint
+	DeletedAt time.Time
+}
+func (r *RepositoryArticle) deleteUserArticles() []model.UserArticle {
+	var sliceIdArticles []model.UserArticle
+	res := r.PostgresDb.Raw(`SELECT id_article, deleted_at FROM user_articles
+							  WHERE deleted_at IS NOT NULL`).
+		Scan(&sliceIdArticles)
+	if res.Error != nil {
+		log.Println(res.Error)
+	}
+	for _, articles := range sliceIdArticles{
+		if time.Now().Compare() < articles.DeletedAt
+		r.PostgresDb.
+	}
 }

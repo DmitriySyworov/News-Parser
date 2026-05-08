@@ -36,6 +36,7 @@ func main() {
 	//goroutines
 	go serviceStat.PushInStat()
 	go serviceArticle.ReplacementInfo()
+	go
 	//handlers
 	auth.NewHandlerAuth(router, &auth.HandlerAuthDep{ServiceAuth: serviceAuth, ManagerMiddleware: managerMiddleware})
 	user.NewHandlerUser(router, &user.HandlerUserDep{ServiceUser: serviceUser})

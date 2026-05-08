@@ -48,7 +48,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr, filter s
 	}
 	limit, errParseLimit := strconv.Atoi(limitStr)
 	if errParseLimit != nil {
-		return nil, ErrIncorrectLimit
+		return nil, ErrIncorrectParams
 	}
 	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, filter, limit)
 	if errGetAllArticle != nil {
@@ -76,19 +76,28 @@ func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, err
 	return article, nil
 
 }
-func (s *ServiceArticle) GetArticlesInCategoryArchive(category, limitStr, dateStr string) ([]ResponseCategoryArchive, error) {
+func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, error) {
 	if !validateCategories(category) {
 		return nil, ErrCategory
 	}
-	limit, errParseLimit := strconv.Atoi(limitStr)
-	if errParseLimit != nil {
-		return nil, ErrIncorrectLimit
+	limit, errParse := strconv.Atoi(limitStr)
+	if errParse != nil {
+		return nil, ErrIncorrectParams
+	}
+	var offset int
+	if offsetStr == "" {
+		offset = 0
+	} else {
+		offset, errParse = strconv.Atoi(offsetStr)
+		if errParse != nil {
+			return nil, ErrIncorrectParams
+		}
 	}
 	date, errParseDate := time.Parse(time.DateOnly, dateStr)
 	if errParseDate != nil {
 		return nil, custom_errors.ErrIncorrectDate
 	}
-	archiveArticles, errGetArticlesArch := s.repo.GetArticlesInCategoryArchive(category, limit, date)
+	archiveArticles, errGetArticlesArch := s.repo.GetArticlesInCategoryArchive(category, offset, limit, date)
 	if errGetArticlesArch != nil {
 		return nil, errGetArticlesArch
 	}
@@ -117,7 +126,7 @@ func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, 
 	})
 	return archArticle, nil
 }
-func (s *ServiceArticle) CreateUserArticles(body *RequestCreateArticle, uuid string, isAddText bool) (*ResponseCreateArticle, error) {
+func (s *ServiceArticle) CreateUserArticles(body *RequestCreateArticle, uuid string, isAddText bool) (*ResponseUserArticles, error) {
 	if _, errNotFound := s.IRepoUser.GetUserByUUID(uuid); errNotFound != nil {
 		return nil, custom_errors.ErrUserNotFound
 	}
@@ -145,7 +154,76 @@ func (s *ServiceArticle) CreateUserArticles(body *RequestCreateArticle, uuid str
 	if len(sliceUserArticle) == 0 {
 		return nil, ErrFailedToParse
 	}
-	return &ResponseCreateArticle{UserArticles: sliceUserArticle}, nil
+	return &ResponseUserArticles{SliceUserArticles: sliceUserArticle}, nil
+}
+func (s *ServiceArticle) DeleteUserArticle(idArticleStr, uuidUser, allArticleStr string) error {
+	var isAllArticle bool
+	if allArticleStr == "true" {
+		isAllArticle = true
+	} else if allArticleStr == "false" {
+		isAllArticle = false
+	}
+	idArticle, errParseId := strconv.Atoi(idArticleStr)
+	if errParseId != nil {
+		return ErrIncorrectId
+	}
+	if isAllArticle {
+		if errDeleteAll := s.repo.DeleteAllUserArticle(uuidUser); errDeleteAll != nil {
+			return custom_errors.ErrRecordNotFound
+		}
+	} else {
+		if errDelete := s.repo.DeleteUserArticleByID(uint(idArticle)); errDelete != nil {
+			return custom_errors.ErrRecordNotFound
+		}
+	}
+	return nil
+}
+func (s *ServiceArticle) GetUserArticle(idArticleStr string) (*model.UserArticle, error) {
+	idArticle, errParseId := strconv.Atoi(idArticleStr)
+	if errParseId != nil {
+		return nil, ErrIncorrectId
+	}
+	if userArticle, errGetUserArt := s.repo.GetUserArticle(uint(idArticle)); errGetUserArt != nil {
+		return nil, custom_errors.ErrUserNotFound
+	} else {
+		return userArticle, nil
+	}
+}
+func (s *ServiceArticle) GetAllUserArticles(category, offsetStr, limitStr, withTextStr string) (*ResponseUserArticles, error) {
+	limit, errParse := strconv.Atoi(limitStr)
+	if errParse != nil {
+		return nil, ErrIncorrectParams
+	}
+	var offset int
+	if offsetStr == "" {
+		offset = 0
+	} else {
+		offset, errParse = strconv.Atoi(offsetStr)
+		if errParse != nil {
+			return nil, ErrIncorrectParams
+		}
+	}
+	var withText bool
+	if withTextStr == "true" {
+		withText = true
+	} else if withTextStr == "false" {
+		withText = false
+	} else {
+		return nil, ErrIncorrectParams
+	}
+	if withText {
+		respUserArticles, errGetArticles := s.repo.GetAllUserArticlesWithText(category, offset, limit)
+		if errGetArticles != nil {
+			return nil, custom_errors.ErrRecordNotFound
+		}
+		return respUserArticles, nil
+	} else {
+		respUserArticles, errGetArticles := s.repo.GetAllUserArticlesWithoutText(category, offset, limit)
+		if errGetArticles != nil {
+			return nil, custom_errors.ErrRecordNotFound
+		}
+		return respUserArticles, nil
+	}
 }
 func validateCategories(category string) bool {
 	for _, c := range StorageCategories {
@@ -246,5 +324,13 @@ func (s *ServiceArticle) loadNewInfo() {
 		defer func() {
 			wg.Wait()
 		}()
+	}
+}
+func (s *ServiceArticle) RemoveUserArticles() {
+	ticker := time.NewTicker(time.Hour * 24)
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+
 	}
 }

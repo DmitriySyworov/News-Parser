@@ -19,7 +19,10 @@ type RequestCreateArticle struct {
 	URL      string `validate:"required,url"`
 	Category string `validate:"required"`
 }
-type ResponseCreateArticle struct {
-	UserArticles []model.UserArticle `json:"user-articles"`
-	Error        string
+type ResponseUserArticles struct {
+	SliceUserArticles []model.UserArticle `json:"user-articles"`
+	Error             string
+}
+type ResponseUserDelete struct {
+	Error string
 }
