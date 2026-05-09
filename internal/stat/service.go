@@ -121,7 +121,7 @@ func (s *ServiceStat) PushInStat() {
 			case common.EventClickArticle:
 				url, ok := event.Data.(string)
 				if !ok {
-					log.Println("failed to assertion type article, got: ", url)
+					log.Println("failed to assertion type article_default, got: ", url)
 				}
 				s.Repo.addClickArticle(url)
 			}

@@ -1,13 +1,14 @@
 package middleware
 
-type ManagerMiddleware struct{
+type ManagerMiddleware struct {
 	Signature string
-	 resp *responseMiddlewareError
+	resp      responseMiddlewareError
 }
 type responseMiddlewareError struct {
 	Error string
 }
-func NewManagerMiddleware(signature string)*ManagerMiddleware{
+
+func NewManagerMiddleware(signature string) *ManagerMiddleware {
 	return &ManagerMiddleware{
 		Signature: signature,
 	}

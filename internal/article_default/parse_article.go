@@ -1,6 +1,7 @@
-package article
+package article_default
 
 import (
+	"app/news-parser/internal/common"
 	"errors"
 	"fmt"
 	"log"
@@ -120,9 +121,10 @@ func (p *Parse) parseCategory(url, category string) {
 				p.LinkCh <- ArticlesGoroutines{Error: errResp}
 			}
 			defer func() {
-				response.Body.Close()
+				if errClose := response.Body.Close(); errClose != nil {
+					fmt.Println(errClose)
+				}
 				p.recoveryGoroutine()
-
 			}()
 			doc, err := goquery.NewDocumentFromReader(response.Body)
 			if err != nil {
@@ -141,17 +143,16 @@ func (p *Parse) parseCategory(url, category string) {
 						}
 					}
 					if !strings.Contains(href, cond.Domain) {
-						article.Header = parseString(linkHeader)
-						article.Url = cond.Domain + parseString(href)
+						article.Header = common.ParseString(linkHeader)
+						article.Url = cond.Domain + common.ParseString(href)
 						p.LinkCh <- article
 					} else {
-						article.Header = parseString(linkHeader)
-						article.Url = parseString(href)
+						article.Header = common.ParseString(linkHeader)
+						article.Url = common.ParseString(href)
 						p.LinkCh <- article
 					}
 				}
 			})
-
 		}
 	}
 	close(p.LinkCh)
@@ -161,12 +162,4 @@ func (p *Parse) recoveryGoroutine() {
 	if errPanic := recover(); errPanic != nil {
 		p.ArticleCh <- ArticlesGoroutines{Error: errors.New(fmt.Sprint(errPanic))}
 	}
-}
-func parseString(str string) string {
-	sliceStr := strings.Fields(str)
-	resStr := ""
-	for _, s := range sliceStr {
-		resStr += s + " "
-	}
-	return resStr
 }
