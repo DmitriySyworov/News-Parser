@@ -1,6 +1,7 @@
-package article
+package article_user
 
 import (
+	"app/news-parser/internal/common"
 	"app/news-parser/internal/model"
 	"app/news-parser/pkg/generate_random"
 	"fmt"
@@ -19,10 +20,10 @@ type CustomParse struct {
 	ArticleUserCh chan model.UserArticle
 	IsOkTextCh    chan bool
 	WG            *sync.WaitGroup
-	Repo          *RepositoryArticle
+	Repo          *RepositoryArticleUser
 }
 
-func NewCustomParsing(wg *sync.WaitGroup, repo *RepositoryArticle) *CustomParse {
+func NewCustomParsing(wg *sync.WaitGroup, repo *RepositoryArticleUser) *CustomParse {
 	return &CustomParse{
 		LinkUserCh:    make(chan model.UserArticle, 10),
 		ArticleUserCh: make(chan model.UserArticle, 10),
@@ -33,9 +34,9 @@ func NewCustomParsing(wg *sync.WaitGroup, repo *RepositoryArticle) *CustomParse 
 }
 func (cp *CustomParse) customParseCategory(url, category, uuid string, isText bool) {
 	defer cp.recoveryCustomGoroutine()
-	after := time.After(time.Second*10)
+	after := time.After(time.Second * 10)
 	select {
-	case <- after:
+	case <-after:
 
 	}
 	response, errResp := http.Get(url)
@@ -59,8 +60,8 @@ func (cp *CustomParse) customParseCategory(url, category, uuid string, isText bo
 			userArticle.IDArticle = uint(generate_random.GenerateNumbers(11))
 			userArticle.UUIDUser = uuid
 			userArticle.Category = category
-			userArticle.URL = parseString(href)
-			userArticle.Header = parseString(linkHeader)
+			userArticle.URL = common.ParseString(href)
+			userArticle.Header = common.ParseString(linkHeader)
 			cp.LinkUserCh <- userArticle
 		}
 	})
@@ -113,7 +114,7 @@ func (cp *CustomParse) CustomParseArticle() {
 }
 func (cp *CustomParse) createUserArticlesWithoutText() {
 	for userArticle := range cp.LinkUserCh {
-		errCreate := cp.Repo.createUserNewArticle(&userArticle)
+		errCreate := cp.Repo.CreateUserNewArticle(&userArticle)
 		if errCreate != nil {
 			cp.LinkUserCh <- model.UserArticle{URL: userArticle.URL, Error: errCreate.Error()}
 		}
@@ -124,7 +125,7 @@ func (cp *CustomParse) createUserArticlesWithoutText() {
 }
 func (cp *CustomParse) createUserArticlesWithText() {
 	for userArticle := range cp.ArticleUserCh {
-		errCreate := cp.Repo.createUserNewArticle(&userArticle)
+		errCreate := cp.Repo.CreateUserNewArticle(&userArticle)
 		if errCreate != nil {
 			cp.ArticleUserCh <- model.UserArticle{URL: userArticle.URL, Error: errCreate.Error()}
 		}

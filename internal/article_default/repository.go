@@ -1,4 +1,4 @@
-package article
+package article_default
 
 import (
 	"app/news-parser/internal/common"
@@ -38,7 +38,7 @@ func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) 
 		RedisDb:    redis,
 	}
 }
-func (r *RepositoryArticle) GetArticlesInCategoryToday(category, filter string, limit int) ([]ResponseCategoryToday, error) {
+func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, limit int, filter, withText bool) ([]ResponseCategoryToday, error) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
 	keys, errKeys := r.RedisDb.Client.Keys(rdbContext, "*").Result()
@@ -51,50 +51,62 @@ func (r *RepositoryArticle) GetArticlesInCategoryToday(category, filter string, 
 			return sliceArticles, nil
 		}
 		if strings.Contains(key, category) {
-			dataArticle, errHMGet := r.RedisDb.Client.HMGet(rdbContext, key, fieldHeader, fieldUrl, fieldIsArticle).Result()
-			if errHMGet != nil {
+			id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
+			if errParseId != nil {
 				return nil, ErrLoadArticles
 			}
-			if dataArticle[2] == "1" && filter == "true" {
-				header, okHeader := dataArticle[0].(string)
-				url, okUrl := dataArticle[1].(string)
-				if !okHeader || !okUrl {
+			if !withText {
+				dataArticle, errHMGet := r.RedisDb.Client.HMGet(rdbContext, key, fieldHeader, fieldUrl, fieldIsArticle).Result()
+				if errHMGet != nil {
 					return nil, ErrLoadArticles
 				}
-				id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
-				if errParseId != nil {
-					return nil, ErrLoadArticles
+				if dataArticle[2] == "1" && filter {
+					header, okHeader := dataArticle[0].(string)
+					url, okUrl := dataArticle[1].(string)
+					if !okHeader || !okUrl {
+						return nil, ErrLoadArticles
+					}
+					isArticle := false
+					if dataArticle[2] == "1" {
+						isArticle = true
+					}
+					sliceArticles = append(sliceArticles, ResponseCategoryToday{
+						Header:    header,
+						URL:       url,
+						IDArticle: uint(id),
+						IsArticle: isArticle,
+					})
+				} else if dataArticle[2] == "0" && !filter {
+					header, okHeader := dataArticle[0].(string)
+					url, okUrl := dataArticle[1].(string)
+					if !okHeader || !okUrl {
+						return nil, ErrLoadArticles
+					}
+					isArticle := false
+					if dataArticle[2] == "1" {
+						isArticle = true
+					}
+					sliceArticles = append(sliceArticles, ResponseCategoryToday{
+						Header:    header,
+						URL:       url,
+						IDArticle: uint(id),
+						IsArticle: isArticle,
+					})
 				}
-				isArticle := false
-				if dataArticle[2] == "1" {
-					isArticle = true
+			} else {
+				mapValueH, errHGetAll := r.RedisDb.HGetAll(rdbContext, key).Result()
+				if errHGetAll != nil {
+					return nil, errHGetAll
 				}
-				sliceArticles = append(sliceArticles, ResponseCategoryToday{
-					Header:    header,
-					URL:       url,
-					IDArticle: uint(id),
-					IsArticle: isArticle,
-				})
-			} else if dataArticle[2] == "0" && filter == "false" {
-				header, okHeader := dataArticle[0].(string)
-				url, okUrl := dataArticle[1].(string)
-				if !okHeader || !okUrl {
-					return nil, ErrLoadArticles
+				if mapValueH[fieldIsArticle] == "1" {
+					sliceArticles = append(sliceArticles, ResponseCategoryToday{
+						Header:    mapValueH[fieldHeader],
+						URL:       mapValueH[fieldUrl],
+						Text:      mapValueH[fieldText],
+						IsArticle: true,
+						IDArticle: uint(id),
+					})
 				}
-				id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
-				if errParseId != nil {
-					return nil, ErrLoadArticles
-				}
-				isArticle := false
-				if dataArticle[2] == "1" {
-					isArticle = true
-				}
-				sliceArticles = append(sliceArticles, ResponseCategoryToday{
-					Header:    header,
-					URL:       url,
-					IDArticle: uint(id),
-					IsArticle: isArticle,
-				})
 			}
 		}
 	}
@@ -127,9 +139,10 @@ func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error)
 	}
 	return nil, custom_errors.ErrRecordNotFound
 }
-func (r *RepositoryArticle) GetArticlesInCategoryArchive(category string, limit int, date time.Time) ([]model.ArticleArchive, error) {
+func (r *RepositoryArticle) GetArticlesInCategoryArchive(category string, offset, limit int, date time.Time) ([]model.ArticleArchive, error) {
 	var archiveArticles []model.ArticleArchive
 	res := r.Where("category = ? AND date = ?", category, date).
+		Offset(offset).
 		Limit(limit).
 		Find(&archiveArticles)
 	if res.Error != nil || len(archiveArticles) == 0 {
@@ -168,6 +181,7 @@ func (r *RepositoryArticle) isRedisArticleExist() bool {
 	}
 	return false
 }
+
 func (r *RepositoryArticle) allArticlesRedis() ([]model.ArticleArchive, error) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
@@ -212,25 +226,24 @@ func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
 	_, errTrans := r.Client.TxPipelined(rdbContext, func(pipeliner redis.Pipeliner) error {
-		key := fmt.Sprint(art.Category, ":", generate_random.GenerateNumbers(7))
-		errHSet := r.RedisDb.HSet(rdbContext, key, "header", art.Header, "url", art.Url, "text", art.Text, "is_article", art.IsArticle).Err()
+		keyArticle := fmt.Sprint(art.Category, ":", generate_random.GenerateNumbers(7))
+		errHSet := r.RedisDb.HSet(rdbContext, keyArticle, "header", art.Header, "url", art.Url, "text", art.Text, "is_article", art.IsArticle).Err()
 		if errHSet != nil {
 			return errHSet
 		}
-		errExp := r.RedisDb.Expire(rdbContext, key, 24*time.Hour).Err()
+		errExp := r.RedisDb.Expire(rdbContext, keyArticle, 24*time.Hour).Err()
 		if errExp != nil {
 			return errExp
 		}
+		keyZ := "Z"+art.Category
+		r.RedisDb.ZRevRangeWithScores(rdbContext, keyZ, 0, 0).Val()
+		r.ZAdd(rdbContext, "Z"+art.Category, redis.Z{
+			Member: key,
+			Score: ,
+		})
 		return nil
 	})
 	if errTrans != nil {
 		fmt.Println(errTrans)
 	}
-}
-func (r *RepositoryArticle)createUserNewArticle(art *model.UserArticle)error{
-	res := r.PostgresDb.Create(&art)
-	if res.Error != nil {
-		return res.Error
-	}
-	return nil
 }

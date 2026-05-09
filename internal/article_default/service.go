@@ -1,4 +1,4 @@
-package article
+package article_default
 
 import (
 	"app/news-parser/internal/common"
@@ -20,7 +20,6 @@ type ServiceArticle struct {
 type ServiceArticleDep struct {
 	*event_bus.EventBus
 	di.IRepoStat
-	di.IRepoUser
 }
 
 const (
@@ -42,15 +41,29 @@ func NewServiceArticle(repoArticle *RepositoryArticle, dep *ServiceArticleDep) *
 		ServiceArticleDep: dep,
 	}
 }
-func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr, filter string) ([]ResponseCategoryToday, error) {
+func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr, filterStr, withTextStr string) ([]ResponseCategoryToday, error) {
 	if !validateCategories(category) {
 		return nil, ErrCategory
 	}
 	limit, errParseLimit := strconv.Atoi(limitStr)
 	if errParseLimit != nil {
-		return nil, ErrIncorrectLimit
+		return nil, custom_errors.ErrIncorrectParams
 	}
-	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, filter, limit)
+	var filter, withText bool
+	if filterStr == "true" {
+		filter = true
+	} else if filterStr == "false" || filterStr == "" {
+		filter = false
+	}
+	if withTextStr == "true" {
+		withText = true
+	} else if withTextStr == "false" || withTextStr == "" {
+		withText = false
+	}
+	if withText && !filter {
+		return nil, custom_errors.ErrIncorrectParams
+	}
+	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, limit, filter, withText)
 	if errGetAllArticle != nil {
 		return nil, errGetAllArticle
 	}
@@ -63,7 +76,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr, filter s
 func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, error) {
 	id, errParseId := strconv.Atoi(idStr)
 	if errParseId != nil {
-		return nil, ErrIncorrectId
+		return nil, custom_errors.ErrIncorrectId
 	}
 	article, errGetArticle := s.repo.GetArticleToday(id)
 	if errGetArticle != nil {
@@ -76,19 +89,28 @@ func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, err
 	return article, nil
 
 }
-func (s *ServiceArticle) GetArticlesInCategoryArchive(category, limitStr, dateStr string) ([]ResponseCategoryArchive, error) {
+func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, error) {
 	if !validateCategories(category) {
 		return nil, ErrCategory
 	}
-	limit, errParseLimit := strconv.Atoi(limitStr)
-	if errParseLimit != nil {
-		return nil, ErrIncorrectLimit
+	limit, errParse := strconv.Atoi(limitStr)
+	if errParse != nil {
+		return nil, custom_errors.ErrIncorrectParams
+	}
+	var offset int
+	if offsetStr == "" {
+		offset = 0
+	} else {
+		offset, errParse = strconv.Atoi(offsetStr)
+		if errParse != nil {
+			return nil, custom_errors.ErrIncorrectParams
+		}
 	}
 	date, errParseDate := time.Parse(time.DateOnly, dateStr)
 	if errParseDate != nil {
 		return nil, custom_errors.ErrIncorrectDate
 	}
-	archiveArticles, errGetArticlesArch := s.repo.GetArticlesInCategoryArchive(category, limit, date)
+	archiveArticles, errGetArticlesArch := s.repo.GetArticlesInCategoryArchive(category, offset, limit, date)
 	if errGetArticlesArch != nil {
 		return nil, errGetArticlesArch
 	}
@@ -117,36 +139,7 @@ func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, 
 	})
 	return archArticle, nil
 }
-func (s *ServiceArticle) CreateUserArticles(body *RequestCreateArticle, uuid string, isAddText bool) (*ResponseCreateArticle, error) {
-	if _, errNotFound := s.IRepoUser.GetUserByUUID(uuid); errNotFound != nil {
-		return nil, custom_errors.ErrUserNotFound
-	}
-	var sliceUserArticle []model.UserArticle
-	var wg sync.WaitGroup
-	customParsing := NewCustomParsing(&wg, s.repo)
-	if isAddText {
-		wg.Add(3)
-		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
-		go customParsing.CustomParseArticle()
-		go customParsing.createUserArticlesWithText()
-		defer wg.Wait()
-		for customLink := range customParsing.LinkUserCh {
-			sliceUserArticle = append(sliceUserArticle, customLink)
-		}
-	} else {
-		wg.Add(2)
-		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
-		go customParsing.createUserArticlesWithoutText()
-		defer wg.Wait()
-		for customArticle := range customParsing.ArticleUserCh {
-			sliceUserArticle = append(sliceUserArticle, customArticle)
-		}
-	}
-	if len(sliceUserArticle) == 0 {
-		return nil, ErrFailedToParse
-	}
-	return &ResponseCreateArticle{UserArticles: sliceUserArticle}, nil
-}
+
 func validateCategories(category string) bool {
 	for _, c := range StorageCategories {
 		if category == c {
@@ -246,5 +239,13 @@ func (s *ServiceArticle) loadNewInfo() {
 		defer func() {
 			wg.Wait()
 		}()
+	}
+}
+func (s *ServiceArticle) RemoveUserArticles() {
+	ticker := time.NewTicker(time.Hour * 24)
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+
 	}
 }

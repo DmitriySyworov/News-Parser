@@ -15,13 +15,20 @@ func NewRepositoryUser(postgres *open_Db.PostgresDb) *RepositoryUser {
 		PostgresDb: postgres,
 	}
 }
-func (r *RepositoryUser) IsUserExist(name, email string) error {
+func (r *RepositoryUser) IsUserExistByNameAndEmail(name, email string) error {
 	resName := r.PostgresDb.Where("name = ?", name).First(&model.User{})
 	resEmail := r.PostgresDb.Where("email = ?", email).First(&model.User{})
 	if resName.Error == nil || resEmail.Error == nil {
 		return custom_errors.ErrUserExist
 	}
 	return nil
+}
+func (r *RepositoryUser) IsUserExistByUUID(uuid string) bool {
+	res := r.PostgresDb.Where("uuid_user = ?", uuid).First(&model.User{})
+	if res.Error != nil {
+		return false
+	}
+	return true
 }
 func (r *RepositoryUser) CreateUser(user *model.User) error {
 	if res := r.PostgresDb.Create(&user); res.Error != nil {

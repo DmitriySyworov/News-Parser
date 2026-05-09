@@ -13,7 +13,8 @@ type IRepoStat interface {
 	CreateStatArticle(statArticle *model.ArticleStat) error
 }
 type IRepoUser interface {
-	IsUserExist(name, email string) error
+	IsUserExistByNameAndEmail(name, email string) error
+	IsUserExistByUUID(uuid string) bool
 	CreateUser(*model.User) error
 	GetUserByEmail(string) (*model.User, error)
 	GetUserByUUID(string) (*model.User, error)

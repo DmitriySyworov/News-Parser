@@ -31,7 +31,7 @@ func NewServiceAuth(repo *RepositoryAuth, dep *ServiceAuthDep) *ServiceAuth {
 	}
 }
 func (s *ServiceAuth) Register(body *RequestRegister) (*ResponseAuth, error) {
-	if errUserExist := s.IRepoUser.IsUserExist(body.Name, body.Email); errUserExist != nil {
+	if errUserExist := s.IRepoUser.IsUserExistByNameAndEmail(body.Name, body.Email); errUserExist != nil {
 		return nil, errUserExist
 	}
 	hashPassword, errHashPass := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
@@ -116,7 +116,7 @@ func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*Respons
 	j := JWT.NewJWT(s.Signature)
 	switch action {
 	case actionRegister:
-		if errUserExist := s.IRepoUser.IsUserExist(tempUser.Name, tempUser.Email); errUserExist != nil {
+		if errUserExist := s.IRepoUser.IsUserExistByNameAndEmail(tempUser.Name, tempUser.Email); errUserExist != nil {
 			return nil, errUserExist
 		}
 		user := &model.User{
