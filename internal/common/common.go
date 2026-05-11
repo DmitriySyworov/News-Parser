@@ -3,10 +3,16 @@ package common
 import (
 	"app/news-parser/internal/custom_errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
+
+type ResponseSuccessful struct {
+	Success bool
+	Data    any
+}
 
 const (
 	EventClickCategory = "click_category"
@@ -36,25 +42,34 @@ func DateNow() time.Time {
 		return date
 	}
 }
-func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, error) {
+func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_errors.Error) {
+	var sliceError []custom_errors.Error
 	var offset, limit int
 	var errParseOffset, errParseLimit error
 	if offsetStr != "" {
 		offset, errParseOffset = strconv.Atoi(offsetStr)
+		if errParseOffset != nil {
+			sliceError = append(sliceError, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectOffset.Error(),
+				Status:  http.StatusBadRequest,
+			})
+		}
 	} else {
 		offset = OffsetDefault
 	}
 	if limitStr != "" {
 		limit, errParseLimit = strconv.Atoi(limitStr)
+		if errParseLimit != nil {
+			sliceError = append(sliceError, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectLimit.Error(),
+				Status:  http.StatusBadRequest,
+			})
+		}
 	} else {
 		limit = LimitDefault
 	}
-	if errParseLimit != nil && errParseOffset != nil {
-		return 0, 0, custom_errors.ErrIncorrectOffsetAndLimit
-	} else if errParseOffset != nil {
-		return 0, 0, custom_errors.ErrIncorrectOffset
-	} else if errParseLimit != nil {
-		return 0, 0, custom_errors.ErrIncorrectLimit
+	if len(sliceError) != 0 {
+		return 0, 0, sliceError
 	}
 	return offset, limit, nil
 }

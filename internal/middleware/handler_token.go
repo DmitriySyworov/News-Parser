@@ -25,20 +25,26 @@ const (
 	KeyAuthToken  = "keyAuthToken"
 )
 
-func (m *ManagerMiddleware)IsTemporaryJWT(next http.Handler) http.Handler {
+func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		header := request.Header.Get("Authorization")
 		token, errToken := helperValidateToken(header)
 		if errToken != nil {
-			m.resp.Error = custom_errors.ErrIncorrectToken.Error()
-			handler_response.HandlerResponse(writer, m.resp.Error, http.StatusBadRequest)
+			m.respError.Errors = append(m.respError.Errors, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectToken.Error(),
+				Status:  http.StatusUnauthorized,
+			})
+			handler_response.HandlerResponse(writer, m.respError, http.StatusUnauthorized)
 			return
 		}
 		j := JWT.NewJWT(m.Signature)
 		sessionId, errParseJwt := j.ParseTemporaryJWT(token)
 		if errParseJwt != nil {
-			m.resp.Error = custom_errors.ErrIncorrectToken.Error()
-			handler_response.HandlerResponse(writer, m.resp.Error, http.StatusBadRequest)
+			m.respError.Errors = append(m.respError.Errors, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectToken.Error(),
+				Status:  http.StatusUnauthorized,
+			})
+			handler_response.HandlerResponse(writer, m.respError, http.StatusUnauthorized)
 			return
 		}
 		valueCtx := context.WithValue(context.Background(), KeySessionJWT, sessionId)
@@ -46,20 +52,26 @@ func (m *ManagerMiddleware)IsTemporaryJWT(next http.Handler) http.Handler {
 		next.ServeHTTP(writer, requestCTX)
 	})
 }
-func (m *ManagerMiddleware)IsAuthJWT(next http.Handler) http.Handler {
+func (m *ManagerMiddleware) IsAuthJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		header := request.Header.Get("Authorization")
 		token, errToken := helperValidateToken(header)
 		if errToken != nil {
-			m.resp.Error = custom_errors.ErrIncorrectToken.Error()
-			handler_response.HandlerResponse(writer, m.resp.Error, http.StatusBadRequest)
+			m.respError.Errors = append(m.respError.Errors, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectToken.Error(),
+				Status:  http.StatusUnauthorized,
+			})
+			handler_response.HandlerResponse(writer, m.respError, http.StatusUnauthorized)
 			return
 		}
 		j := JWT.NewJWT(m.Signature)
 		UUID, errParseJwt := j.ParseJWT(token)
 		if errParseJwt != nil {
-			m.resp.Error = custom_errors.ErrIncorrectToken.Error()
-			handler_response.HandlerResponse(writer, m.resp.Error, http.StatusBadRequest)
+			m.respError.Errors = append(m.respError.Errors, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectToken.Error(),
+				Status:  http.StatusUnauthorized,
+			})
+			handler_response.HandlerResponse(writer, m.respError, http.StatusUnauthorized)
 			return
 		}
 		valueCtx := context.WithValue(context.Background(), KeyAuthToken, UUID)

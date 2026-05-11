@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"app/news-parser/internal/custom_errors"
 	"app/news-parser/pkg/handler_response"
 	"errors"
 	"log"
@@ -12,8 +13,11 @@ func (m *ManagerMiddleware) RecoveryPanic(next http.Handler) http.Handler {
 		defer func() {
 			if errPanic := recover(); errPanic != nil {
 				log.Println(errPanic)
-				m.resp.Error = errors.New("critical error on the server side").Error()
-				handler_response.HandlerResponse(writer, m.resp, http.StatusInternalServerError)
+				m.respError.Errors = append(m.respError.Errors, custom_errors.Error{
+					Message: errors.New("critical error on the server side").Error(),
+					Status:  http.StatusInternalServerError,
+				})
+				handler_response.HandlerResponse(writer, m.respError, http.StatusInternalServerError)
 			}
 		}()
 		next.ServeHTTP(writer, request)

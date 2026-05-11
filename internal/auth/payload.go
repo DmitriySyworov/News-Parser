@@ -12,11 +12,9 @@ type RequestLogin struct {
 type ResponseAuth struct {
 	Message string `json:"message"`
 	JWTTemp string `json:"jwt-temp"`
-	Error   string `json:"error"`
 }
 type ResponseConfirm struct {
-	JWT   string
-	Error string
+	JWT string
 }
 type RequestConfirm struct {
 	Code uint `json:"code" validate:"required"`
