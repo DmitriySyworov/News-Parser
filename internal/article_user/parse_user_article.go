@@ -139,3 +139,23 @@ func (cp *CustomParse) recoveryCustomGoroutine() {
 		cp.ArticleUserCh <- model.UserArticle{Error: fmt.Sprint(errPanic)}
 	}
 }
+func ParseText(url string) (string, error) {
+	path, errLaunch := launcher.New().Headless(true).Launch()
+	if errLaunch != nil {
+		return "", errLaunch
+	}
+	browser := rod.New().ControlURL(path).MustConnect()
+	defer func() {
+		if errClose := browser.Close(); errClose != nil {
+			log.Println(errClose)
+		}
+	}()
+	page := browser.MustPage(url)
+	page.Timeout(10 * time.Second).MustWaitLoad()
+	text, errElement := page.MustElement("body").Text()
+	if errElement != nil {
+		return "", errElement
+	}
+	return text, nil
+
+}

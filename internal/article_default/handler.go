@@ -1,17 +1,15 @@
 package article_default
 
 import (
+	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
-	"app/news-parser/internal/model"
 	"app/news-parser/pkg/handler_response"
 	"net/http"
 )
 
 type HandlerArticle struct {
-	model.ArticleArchive
-	model.ArticleToday
-	ResponseCategoryToday
-	ResponseCategoryArchive
+	custom_errors.ResponseError
+	common.ResponseSuccessful
 	Dep *HandlerArticleDep
 }
 type HandlerArticleDep struct {
@@ -30,49 +28,49 @@ func NewHandlerArticle(router *http.ServeMux, dep *HandlerArticleDep) {
 func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		category := request.PathValue("category")
+		offsetStr := request.URL.Query().Get("offset")
 		limitStr := request.URL.Query().Get("limit")
-		filterArticles := request.URL.Query().Get("onlyArticles")
+		filterArticles := request.URL.Query().Get("isArticles")
 		withText := request.URL.Query().Get("withText")
-		if (filterArticles != "" && filterArticles != "false" && filterArticles != "true") || (withText != "" && withText != "false" && withText != "true") {
-			h.ResponseCategoryToday.Error = ErrChoiceArticlesFilter.Error()
-			handler_response.HandlerResponse(writer, h.ResponseCategoryToday, http.StatusBadRequest)
-			return
-		}
-		allArticle, errGetAllArticle := h.Dep.ServiceArticle.GetArticlesInCategoryToday(category, limitStr, filterArticles, withText)
-		if errGetAllArticle != nil {
-			h.ResponseCategoryToday.Error = errGetAllArticle.Error()
-			switch errGetAllArticle {
-			case ErrLoadArticles:
-				handler_response.HandlerResponse(writer, h.ResponseCategoryToday, http.StatusInternalServerError)
-			case custom_errors.ErrIncorrectParams, ErrCategory:
-				handler_response.HandlerResponse(writer, h.ResponseCategoryToday, http.StatusBadRequest)
+		allArticle, errGetAllArticle := h.Dep.ServiceArticle.GetArticlesInCategoryToday(category, offsetStr, limitStr, filterArticles, withText)
+		if len(errGetAllArticle) != 0 {
+			h.ResponseError.Errors = errGetAllArticle
+			if len(errGetAllArticle) == 1 && errGetAllArticle[0].Message == ErrLoadArticles.Error() {
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
+			} else {
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			}
 			return
 		}
-		handler_response.HandlerResponse(writer, allArticle, http.StatusOK)
+		h.ResponseSuccessful.Success = true
+		h.ResponseSuccessful.Data = allArticle
+		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
 	}
 }
 func (h *HandlerArticle) GetArticleToday() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		idStr := request.PathValue("id")
 		if len(idStr) != lengthIdArticle {
-			handler_response.HandlerResponse(writer, h.ArticleToday, http.StatusBadRequest)
+			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectArticleId.Error(),
+				Status:  http.StatusBadRequest,
+			})
+			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			return
 		}
 		article, errGetArticle := h.Dep.ServiceArticle.GetArticleToday(idStr)
-		if errGetArticle != nil {
-			h.ArticleToday.Error = errGetArticle.Error()
-			switch errGetArticle {
-			case ErrLoadArticles:
-				handler_response.HandlerResponse(writer, h.ArticleToday, http.StatusInternalServerError)
-			case custom_errors.ErrRecordNotFound:
-				handler_response.HandlerResponse(writer, h.ArticleToday, http.StatusNotFound)
-			case custom_errors.ErrIncorrectId:
-				handler_response.HandlerResponse(writer, h.ArticleToday, http.StatusBadRequest)
+		if errGetArticle.Message != "" {
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errGetArticle)
+			if errGetArticle.Message == ErrLoadArticles.Error() {
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
+			} else {
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			}
 			return
 		}
-		handler_response.HandlerResponse(writer, article, http.StatusOK)
+		h.ResponseSuccessful.Success = true
+		h.ResponseSuccessful.Data = article
+		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
 	}
 }
 func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
@@ -82,31 +80,39 @@ func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
 		limitStr := request.URL.Query().Get("limit")
 		dateStr := request.URL.Query().Get("date")
 		articlesArchive, errGetArchive := h.Dep.ServiceArticle.GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr)
-		if errGetArchive != nil {
-			switch errGetArchive {
-			case custom_errors.ErrIncorrectParams, custom_errors.ErrIncorrectDate:
-				handler_response.HandlerResponse(writer, h.ResponseCategoryArchive, http.StatusBadRequest)
-			case ErrLoadArticles:
-				handler_response.HandlerResponse(writer, h.ResponseCategoryArchive, http.StatusInternalServerError)
+		if len(errGetArchive) != 0 {
+			h.ResponseError.Errors = errGetArchive
+			if len(errGetArchive) == 1 && errGetArchive[0].Message == ErrNotFoundArticle.Error() {
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusNotFound)
+			} else {
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			}
 			return
 		}
-		handler_response.HandlerResponse(writer, articlesArchive, http.StatusOK)
+		h.ResponseSuccessful.Success = true
+		h.ResponseSuccessful.Data = articlesArchive
+		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
 	}
 }
 func (h *HandlerArticle) GetArchiveArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		uuid := request.PathValue("uuid")
 		if uuid == "" {
-			handler_response.HandlerResponse(writer, h.ArticleArchive, http.StatusBadRequest)
+			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+				Message: ErrIncorrectUUIDArticle.Error(),
+				Status:  http.StatusBadRequest,
+			})
+			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			return
 		}
 		archArticle, errGetArchArticle := h.Dep.ServiceArticle.GetArchiveArticle(uuid)
-		if errGetArchArticle != nil {
-			h.ArticleArchive.Error = archArticle.Error
-			handler_response.HandlerResponse(writer, h.ArticleArchive, http.StatusNotFound)
+		if errGetArchArticle.Message != "" {
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errGetArchArticle)
+			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusNotFound)
 			return
 		}
-		handler_response.HandlerResponse(writer, archArticle, http.StatusOK)
+		h.ResponseSuccessful.Success = true
+		h.ResponseSuccessful.Data = archArticle
+		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
 	}
 }

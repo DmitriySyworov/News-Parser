@@ -73,7 +73,7 @@ func (p *Parse) parseArticle(category string) {
 		for _, cond := range ConditionArticles {
 			select {
 			case <-ticker.C:
-				log.Println("время на запись текста истекло")
+				log.Println("time to write down text has expired")
 				art.Text = "-"
 				p.ArticleCh <- art
 			default:
@@ -83,7 +83,7 @@ func (p *Parse) parseArticle(category string) {
 					page.Timeout(10 * time.Second).MustWaitLoad()
 					text, err := page.MustElement("body").Text()
 					if err != nil {
-						log.Println("проблема с парсингом страницы")
+						log.Println("page parsing error")
 						art.Text = "-"
 						p.ArticleCh <- art
 					}

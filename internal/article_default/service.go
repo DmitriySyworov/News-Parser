@@ -7,6 +7,7 @@ import (
 	"app/news-parser/internal/model"
 	"app/news-parser/pkg/event_bus"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,31 +42,50 @@ func NewServiceArticle(repoArticle *RepositoryArticle, dep *ServiceArticleDep) *
 		ServiceArticleDep: dep,
 	}
 }
-func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr, filterStr, withTextStr string) ([]ResponseCategoryToday, error) {
+func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitStr, filterStr, withTextStr string) ([]ResponseCategoryToday, []custom_errors.Error) {
+	var sliceError []custom_errors.Error
 	if !validateCategories(category) {
-		return nil, ErrCategory
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: ErrCategory.Error(),
+			Status:  http.StatusBadRequest,
+		})
 	}
-	limit, errParseLimit := strconv.Atoi(limitStr)
-	if errParseLimit != nil {
-		return nil, custom_errors.ErrIncorrectParams
+	offset, limit, errValidateOffsetLimit := common.ValidateOffsetAndLimit(offsetStr, limitStr)
+	if errValidateOffsetLimit != nil {
+		sliceError = append(sliceError, errValidateOffsetLimit...)
 	}
 	var filter, withText bool
-	if filterStr == "true" {
+	if filterStr == "true" || filterStr == "" {
 		filter = true
-	} else if filterStr == "false" || filterStr == "" {
+	} else if filterStr == "false" {
 		filter = false
+	} else {
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: ErrIncorrectOnlyArticle.Error(),
+			Status:  http.StatusBadRequest,
+		})
+
 	}
 	if withTextStr == "true" {
 		withText = true
 	} else if withTextStr == "false" || withTextStr == "" {
 		withText = false
+	} else {
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: custom_errors.ErrIncorrectWithText.Error(),
+			Status:  http.StatusBadRequest,
+		})
 	}
-	if withText && !filter {
-		return nil, custom_errors.ErrIncorrectParams
+	if len(sliceError) != 0 {
+		return nil, sliceError
 	}
-	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, limit, filter, withText)
+	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, offset, limit, filter, withText)
 	if errGetAllArticle != nil {
-		return nil, errGetAllArticle
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: errGetAllArticle.Error(),
+			Status:  http.StatusInternalServerError,
+		})
+		return nil, sliceError
 	}
 	go s.Publisher(&event_bus.Event{
 		Name: common.EventClickCategory,
@@ -73,14 +93,20 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, limitStr, filterSt
 	})
 	return allArticle, nil
 }
-func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, error) {
+func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, *custom_errors.Error) {
 	id, errParseId := strconv.Atoi(idStr)
 	if errParseId != nil {
-		return nil, custom_errors.ErrIncorrectId
+		return nil, &custom_errors.Error{
+			Message: custom_errors.ErrIncorrectArticleId.Error(),
+			Status:  http.StatusBadRequest,
+		}
 	}
 	article, errGetArticle := s.repo.GetArticleToday(id)
 	if errGetArticle != nil {
-		return nil, errGetArticle
+		return nil, &custom_errors.Error{
+			Message: ErrLoadArticles.Error(),
+			Status:  http.StatusInternalServerError,
+		}
 	}
 	go s.Publisher(&event_bus.Event{
 		Name: common.EventClickArticle,
@@ -89,32 +115,37 @@ func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, err
 	return article, nil
 
 }
-func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, error) {
+func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, []custom_errors.Error) {
+	var sliceError []custom_errors.Error
 	if !validateCategories(category) {
-		return nil, ErrCategory
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: ErrCategory.Error(),
+			Status:  http.StatusBadRequest,
+		})
 	}
-	limit, errParse := strconv.Atoi(limitStr)
-	if errParse != nil {
-		return nil, custom_errors.ErrIncorrectParams
-	}
-	var offset int
-	if offsetStr == "" {
-		offset = 0
-	} else {
-		offset, errParse = strconv.Atoi(offsetStr)
-		if errParse != nil {
-			return nil, custom_errors.ErrIncorrectParams
-		}
+	offset, limit, errOffsetLimit := common.ValidateOffsetAndLimit(offsetStr, limitStr)
+	if len(errOffsetLimit) != 0 {
+		sliceError = append(sliceError, errOffsetLimit...)
 	}
 	date, errParseDate := time.Parse(time.DateOnly, dateStr)
 	if errParseDate != nil {
-		return nil, custom_errors.ErrIncorrectDate
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: custom_errors.ErrIncorrectDate.Error(),
+			Status:  http.StatusBadRequest,
+		})
+	}
+	if len(sliceError) != 0 {
+		return nil, sliceError
 	}
 	archiveArticles, errGetArticlesArch := s.repo.GetArticlesInCategoryArchive(category, offset, limit, date)
 	if errGetArticlesArch != nil {
-		return nil, errGetArticlesArch
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: errGetArticlesArch.Error(),
+			Status:  http.StatusUnauthorized,
+		})
+		return nil, sliceError
 	}
-	var respCategoryArch []ResponseCategoryArchive
+	var respCategoryArch []ResponseCategoryArchive //!!!!!
 	for _, arch := range archiveArticles {
 		var tempArch ResponseCategoryArchive
 		tempArch.UUIDArticle = arch.UUIDArticle
@@ -128,10 +159,13 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	})
 	return respCategoryArch, nil
 }
-func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, error) {
+func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, *custom_errors.Error) {
 	archArticle, errGetArchArticle := s.repo.GetArchiveArticle(uuid)
 	if errGetArchArticle != nil {
-		return nil, custom_errors.ErrRecordNotFound
+		return nil, &custom_errors.Error{
+			Message: ErrNotFoundArticle.Error(),
+			Status:  http.StatusNotFound,
+		}
 	}
 	go s.Publisher(&event_bus.Event{
 		Name: common.EventClickArticle,
@@ -150,7 +184,7 @@ func validateCategories(category string) bool {
 }
 func (s *ServiceArticle) ReplacementInfo() {
 	tickerEveryDay := time.NewTicker(24 * time.Hour)
-	tickerCheckEmpty := time.NewTicker(1 * time.Minute) //!!!
+	tickerCheckEmpty := time.NewTicker(20 * time.Second) //!!!
 	defer tickerEveryDay.Stop()
 	defer tickerCheckEmpty.Stop()
 	for {

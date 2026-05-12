@@ -13,18 +13,21 @@ type RequestCreateArticle struct {
 }
 type RequestUpdateArticle struct {
 	Category string
-	Domain   string
 }
-type ResponseUserArticles struct {
+type RequestUpdateBatchArticles struct {
+	Domain string `validate:"required"`
+}
+type ResponseSliceUserArticles struct {
 	SliceUserArticles []model.UserArticle `json:"user-articles"`
 	Error             string
 }
-type ResponseUserDelete struct {
-	Error string
+type ResponseUserArticle struct {
+	Article model.UserArticle
+	Status  int
+	Error   string
 }
 type ResponseRemoveUserArticles struct {
 	SliceRemoveUserArticles []RemoveUserArticle `json:"remove-user-articles"`
-	Error                   string
 }
 type RemoveUserArticle struct {
 	*gorm.Model

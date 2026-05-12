@@ -44,7 +44,7 @@ type ArticleStat struct {
 	Click uint
 	Date  time.Time `gorm:"not null"`
 }
-type TemporaryUser struct {
+type TemporaryData struct {
 	Name      string
 	Email     string
 	Password  string

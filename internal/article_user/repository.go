@@ -19,8 +19,40 @@ func NewRepositoryArticleUser(postgres *open_Db.PostgresDb) *RepositoryArticleUs
 		PostgresDb: postgres,
 	}
 }
-func (r *RepositoryArticleUser) UpdateUserArticle(userUUID string, userArticle *model.UserArticle) (*model.UserArticle, error) {
-
+func (r *RepositoryArticleUser) UpdateUserArticle(userUUID string, userArticle *model.UserArticle) error {
+	res := r.PostgresDb.Where("uuid_user = ?", userUUID).Updates(&userArticle)
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
+}
+func (r *RepositoryArticleUser) UpdateOneColumnUserArticle(userUUID string, data string, nameColumn string) (*model.UserArticle, error) {
+	var userArticle model.UserArticle
+	res := r.PostgresDb.
+		Model(&model.UserArticle{}).
+		Clauses(clause.Returning{}).
+		Where("uuid_user = ?", userUUID).
+		Update(nameColumn, data).
+		Scan(&userArticle)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &userArticle, nil
+}
+func (r *RepositoryArticleUser) GetUserArticlesByDomain(userUUID string, domain string, flagWithText bool) ([]model.UserArticle, error) {
+	var sliceUserArticle []model.UserArticle
+	if flagWithText {
+		res := r.PostgresDb.Where("uuid_user = ? AND url LIKE %?% AND text IS NOT NULL OR text != '-'", userUUID, domain).First(&sliceUserArticle)
+		if res.Error != nil || len(sliceUserArticle) == 0 {
+			return nil, ErrNotFoundUserArticle
+		}
+	} else {
+		res := r.PostgresDb.Where("uuid_user = ? AND url LIKE %?% AND text IS NULL OR text = '-'", userUUID, domain).First(&sliceUserArticle)
+		if res.Error != nil || len(sliceUserArticle) == 0 {
+			return nil, ErrNotFoundUserArticle
+		}
+	}
+	return sliceUserArticle, nil
 }
 func (r *RepositoryArticleUser) GetUserArticle(userUUID string, idArticle uint) (*model.UserArticle, error) {
 	var userArticle model.UserArticle
@@ -37,7 +69,7 @@ func (r *RepositoryArticleUser) DeleteAllUserArticle(uuidUser string) error {
 	}
 	return nil
 }
-func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category string, offset, limit int) (*ResponseUserArticles, error) {
+func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category string, offset, limit int) (*ResponseSliceUserArticles, error) {
 	var sliceUserArticle []model.UserArticle
 	if category == "" {
 		res := r.PostgresDb.
@@ -65,11 +97,11 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category
 	if len(sliceUserArticle) == 0 {
 		return nil, ErrNotFoundUserArticle
 	}
-	return &ResponseUserArticles{
+	return &ResponseSliceUserArticles{
 		SliceUserArticles: sliceUserArticle,
 	}, nil
 }
-func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category string, offset, limit int) (*ResponseUserArticles, error) {
+func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category string, offset, limit int) (*ResponseSliceUserArticles, error) {
 	var sliceUserArticle []model.UserArticle
 	if category == "" {
 		res := r.PostgresDb.
@@ -97,7 +129,7 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category st
 	if len(sliceUserArticle) == 0 {
 		return nil, ErrNotFoundUserArticle
 	}
-	return &ResponseUserArticles{
+	return &ResponseSliceUserArticles{
 		SliceUserArticles: sliceUserArticle,
 	}, nil
 }

@@ -38,76 +38,74 @@ func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) 
 		RedisDb:    redis,
 	}
 }
-func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, limit int, filter, withText bool) ([]ResponseCategoryToday, error) {
+func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, offset, limit int, filter, withText bool) ([]ResponseCategoryToday, error) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
-	keys, errKeys := r.RedisDb.Client.Keys(rdbContext, "*").Result()
-	if errKeys != nil {
-		return nil, ErrLoadArticles
+	keyZ := "Z:" + category + ":" + fmt.Sprint(filter)
+	keysArticle, errZRange := r.RedisDb.ZRange(rdbContext, keyZ, int64(offset), int64(limit)).Result()
+	if errZRange != nil {
+		return nil, errZRange
 	}
 	var sliceArticles []ResponseCategoryToday
-	for _, key := range keys {
-		if len(sliceArticles) >= limit {
-			return sliceArticles, nil
+	for _, key := range keysArticle {
+		id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
+		if errParseId != nil {
+			return nil, errParseId
 		}
-		if strings.Contains(key, category) {
-			id, errParseId := strconv.Atoi(strings.Split(key, ":")[1])
-			if errParseId != nil {
+		if !withText {
+			dataArticle, errHMGet := r.RedisDb.Client.HMGet(rdbContext, key, fieldHeader, fieldUrl, fieldIsArticle).Result()
+			if errHMGet != nil {
 				return nil, ErrLoadArticles
 			}
-			if !withText {
-				dataArticle, errHMGet := r.RedisDb.Client.HMGet(rdbContext, key, fieldHeader, fieldUrl, fieldIsArticle).Result()
-				if errHMGet != nil {
+			if dataArticle[2] == "1" && filter {
+				header, okHeader := dataArticle[0].(string)
+				url, okUrl := dataArticle[1].(string)
+				if !okHeader || !okUrl {
 					return nil, ErrLoadArticles
 				}
-				if dataArticle[2] == "1" && filter {
-					header, okHeader := dataArticle[0].(string)
-					url, okUrl := dataArticle[1].(string)
-					if !okHeader || !okUrl {
-						return nil, ErrLoadArticles
-					}
-					isArticle := false
-					if dataArticle[2] == "1" {
-						isArticle = true
-					}
-					sliceArticles = append(sliceArticles, ResponseCategoryToday{
-						Header:    header,
-						URL:       url,
-						IDArticle: uint(id),
-						IsArticle: isArticle,
-					})
-				} else if dataArticle[2] == "0" && !filter {
-					header, okHeader := dataArticle[0].(string)
-					url, okUrl := dataArticle[1].(string)
-					if !okHeader || !okUrl {
-						return nil, ErrLoadArticles
-					}
-					isArticle := false
-					if dataArticle[2] == "1" {
-						isArticle = true
-					}
-					sliceArticles = append(sliceArticles, ResponseCategoryToday{
-						Header:    header,
-						URL:       url,
-						IDArticle: uint(id),
-						IsArticle: isArticle,
-					})
+				isArticle := false
+				if dataArticle[2] == "1" {
+					isArticle = true
 				}
-			} else {
-				mapValueH, errHGetAll := r.RedisDb.HGetAll(rdbContext, key).Result()
-				if errHGetAll != nil {
-					return nil, errHGetAll
+				sliceArticles = append(sliceArticles, ResponseCategoryToday{
+					Header:    header,
+					URL:       url,
+					IDArticle: uint(id),
+					IsArticle: isArticle,
+				})
+			} else if dataArticle[2] == "0" && !filter {
+				header, okHeader := dataArticle[0].(string)
+				url, okUrl := dataArticle[1].(string)
+				if !okHeader || !okUrl {
+					return nil, ErrLoadArticles
 				}
-				if mapValueH[fieldIsArticle] == "1" {
-					sliceArticles = append(sliceArticles, ResponseCategoryToday{
-						Header:    mapValueH[fieldHeader],
-						URL:       mapValueH[fieldUrl],
-						Text:      mapValueH[fieldText],
-						IsArticle: true,
-						IDArticle: uint(id),
-					})
+				isArticle := false
+				if dataArticle[2] == "1" {
+					isArticle = true
 				}
+				sliceArticles = append(sliceArticles, ResponseCategoryToday{
+					Header:    header,
+					URL:       url,
+					IDArticle: uint(id),
+					IsArticle: isArticle,
+				})
 			}
+		} else {
+			mapValueH, errHGetAll := r.RedisDb.HGetAll(rdbContext, key).Result()
+			var isArticle bool
+			if errHGetAll != nil {
+				return nil, errHGetAll
+			}
+			if mapValueH[fieldIsArticle] == "1" {
+				isArticle = true
+			}
+			sliceArticles = append(sliceArticles, ResponseCategoryToday{
+				Header:    mapValueH[fieldHeader],
+				URL:       mapValueH[fieldUrl],
+				Text:      mapValueH[fieldText],
+				IsArticle: isArticle,
+				IDArticle: uint(id),
+			})
 		}
 	}
 	if len(sliceArticles) == 0 {
@@ -121,7 +119,7 @@ func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error)
 	defer cancel()
 	keys, errKey := r.RedisDb.Client.Keys(rdbContext, "*").Result()
 	if errKey != nil {
-		return nil, ErrLoadArticles
+		return nil, errKey
 	}
 	for _, key := range keys {
 		if strings.Contains(key, idStr) {
@@ -137,7 +135,7 @@ func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error)
 			}, nil
 		}
 	}
-	return nil, custom_errors.ErrRecordNotFound
+	return nil, ErrLoadArticles
 }
 func (r *RepositoryArticle) GetArticlesInCategoryArchive(category string, offset, limit int, date time.Time) ([]model.ArticleArchive, error) {
 	var archiveArticles []model.ArticleArchive
@@ -146,7 +144,7 @@ func (r *RepositoryArticle) GetArticlesInCategoryArchive(category string, offset
 		Limit(limit).
 		Find(&archiveArticles)
 	if res.Error != nil || len(archiveArticles) == 0 {
-		return nil, ErrLoadArticles
+		return nil, ErrNotFoundArticle
 	}
 	return archiveArticles, nil
 }
@@ -235,12 +233,19 @@ func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
 		if errExp != nil {
 			return errExp
 		}
-		keyZ := "Z"+art.Category
-		r.RedisDb.ZRevRangeWithScores(rdbContext, keyZ, 0, 0).Val()
-		r.ZAdd(rdbContext, "Z"+art.Category, redis.Z{
-			Member: key,
-			Score: ,
-		})
+		keyZ := "Z:" + art.Category + ":" + fmt.Sprint(art.IsArticle)
+		ZCategory := r.RedisDb.ZRevRangeWithScores(rdbContext, keyZ, 0, -1).Val()
+		if len(ZCategory) == 0 {
+			r.ZAdd(rdbContext, keyZ, redis.Z{
+				Member: keyArticle,
+				Score:  1,
+			})
+		} else {
+			r.ZAdd(rdbContext, keyZ, redis.Z{
+				Member: keyArticle,
+				Score:  float64(len(ZCategory) + 1),
+			})
+		}
 		return nil
 	})
 	if errTrans != nil {

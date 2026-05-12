@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/middleware"
 	"app/news-parser/pkg/handler_request"
@@ -9,8 +10,8 @@ import (
 )
 
 type HandlerAuth struct {
-	ResponseAuth
-	ResponseConfirm
+	custom_errors.ResponseError
+	common.ResponseSuccessful
 	Dep *HandlerAuthDep
 }
 type HandlerAuthDep struct {
@@ -30,93 +31,126 @@ func (h *HandlerAuth) Register() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		body, errRequest := handler_request.HandlerRequest[RequestRegister](request)
 		if errRequest != nil {
-			h.ResponseAuth.Error = errRequest.Error()
 			switch errRequest {
 			case handler_request.ErrIncorrectFormat:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusBadRequest)
+				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+					Message: errRequest.Error(),
+					Status:  http.StatusBadRequest,
+				})
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			case handler_request.ErrInvalidData:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusUnprocessableEntity)
+				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+					Message: errRequest.Error(),
+					Status:  http.StatusUnprocessableEntity,
+				})
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnprocessableEntity)
 			}
 			return
 		}
 		respAuth, errAuth := h.Dep.Register(body)
-		if errAuth != nil {
-			h.ResponseAuth.Error = errAuth.Error()
-			switch errAuth {
-			case ErrFailedSecurity:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusInternalServerError)
+		if errAuth.Message != "" {
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
+			switch errAuth.Message {
+			case custom_errors.ErrFailedSecurity.Error():
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
 			default:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusUnauthorized)
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
 			}
 			return
 		}
-		handler_response.HandlerResponse(writer, respAuth, http.StatusOK)
+		h.ResponseSuccessful.Success = true
+		h.ResponseSuccessful.Data = respAuth
+		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
 	}
 }
 func (h *HandlerAuth) Login() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		body, errRequest := handler_request.HandlerRequest[RequestLogin](request)
 		if errRequest != nil {
-			h.ResponseAuth.Error = errRequest.Error()
 			switch errRequest {
 			case handler_request.ErrIncorrectFormat:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusBadRequest)
+				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+					Message: errRequest.Error(),
+					Status:  http.StatusBadRequest,
+				})
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			case handler_request.ErrInvalidData:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusUnprocessableEntity)
+				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+					Message: errRequest.Error(),
+					Status:  http.StatusUnprocessableEntity,
+				})
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnprocessableEntity)
 			}
 			return
 		}
 		respAuth, errAuth := h.Dep.Login(body)
-		if errAuth != nil {
-			h.ResponseAuth.Error = errAuth.Error()
-			switch errAuth {
-			case ErrFailedSecurity:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusInternalServerError)
+		if errAuth.Message != "" {
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
+			switch errAuth.Message {
+			case custom_errors.ErrFailedSecurity.Error():
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
 			default:
-				handler_response.HandlerResponse(writer, h.ResponseAuth, http.StatusUnauthorized)
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
 			}
 			return
 		}
-		handler_response.HandlerResponse(writer, respAuth, http.StatusOK)
+		h.ResponseSuccessful.Success = true
+		h.ResponseSuccessful.Data = respAuth
+		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
 	}
 }
 func (h *HandlerAuth) Confirm() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		action := request.URL.Query().Get("action")
 		if action != actionLogin && action != actionRegister {
-			h.ResponseConfirm.Error = custom_errors.ErrIncorrectAction.Error()
-			handler_response.HandlerResponse(writer, h.ResponseConfirm, http.StatusBadRequest)
+			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectAction.Error(),
+				Status:  http.StatusBadRequest,
+			})
+			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			return
 		}
 		valueCtx := request.Context().Value(middleware.KeySessionJWT)
 		sessionId, ok := valueCtx.(string)
 		if !ok {
-			h.ResponseConfirm.Error = custom_errors.ErrIncorrectToken.Error()
-			handler_response.HandlerResponse(writer, h.ResponseConfirm, http.StatusUnauthorized)
+			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+				Message: custom_errors.ErrIncorrectToken.Error(),
+				Status:  http.StatusUnauthorized,
+			})
+			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
 			return
 		}
-		body, errRequest := handler_request.HandlerRequest[RequestConfirm](request)
+		body, errRequest := handler_request.HandlerRequest[common.RequestConfirm](request)
 		if errRequest != nil {
-			h.ResponseConfirm.Error = errRequest.Error()
 			switch errRequest {
 			case handler_request.ErrIncorrectFormat:
-				handler_response.HandlerResponse(writer, h.ResponseConfirm, http.StatusBadRequest)
+				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+					Message: errRequest.Error(),
+					Status:  http.StatusBadRequest,
+				})
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			case handler_request.ErrInvalidData:
-				handler_response.HandlerResponse(writer, h.ResponseConfirm, http.StatusUnprocessableEntity)
+				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+					Message: errRequest.Error(),
+					Status:  http.StatusUnprocessableEntity,
+				})
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnprocessableEntity)
 			}
 			return
 		}
 		respConfirm, errConfirm := h.Dep.Confirm(body.Code, action, sessionId)
 		if errConfirm != nil {
-			h.ResponseConfirm.Error = errConfirm.Error()
-			switch errConfirm {
-			case ErrSaveDataUser, ErrFailedSecurity:
-				handler_response.HandlerResponse(writer, h.ResponseConfirm, http.StatusInternalServerError)
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errConfirm)
+			switch errConfirm.Message {
+			case ErrSaveDataUser.Error(), custom_errors.ErrFailedSecurity.Error():
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
 			default:
-				handler_response.HandlerResponse(writer, h.ResponseConfirm, http.StatusUnauthorized)
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
 			}
 			return
 		}
-		handler_response.HandlerResponse(writer, respConfirm, http.StatusCreated)
+		h.ResponseSuccessful.Success = true
+		h.ResponseSuccessful.Data = respConfirm
+		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusCreated)
 	}
 }
