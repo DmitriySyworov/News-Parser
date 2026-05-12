@@ -1,7 +1,9 @@
 package common
 
 import (
+	"app/news-parser/configs"
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/pkg/send_letter"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,6 +26,11 @@ const (
 	RdbTimeout = time.Second * 10
 
 	UnixMonth = 2592000
+
+	LengthTempCode = 6
+	LengthSession  = 9
+	KeySession     = "session:"
+	MessageEmail   = "we sent a letter to the specified email: "
 )
 
 func DateNow() time.Time {
@@ -80,4 +87,24 @@ func ParseString(str string) string {
 		resStr += s + " "
 	}
 	return resStr
+}
+
+type ResponseAuth struct {
+	Message string `json:"message"`
+	JWTTemp string `json:"jwt-temp"`
+}
+type RequestConfirm struct {
+	Code uint `json:"code" validate:"required"`
+}
+
+func SendEmailLetter(userEmail string, tempCode uint, conf *configs.Configs) error {
+	after := time.After(time.Second * 30)
+	letter := send_letter.NewSenderLetter(conf.ApiEmail, conf.ApiPassword, conf.Address, conf.AddressHost)
+	go letter.SendEmailLetter(userEmail, tempCode)
+	select {
+	case <-after:
+		return custom_errors.ErrSendLetter
+	case errSend := <-letter.ChErr:
+		return errSend
+	}
 }

@@ -2,14 +2,13 @@ package auth
 
 import (
 	"app/news-parser/configs"
+	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
 	"app/news-parser/internal/model"
 	"app/news-parser/pkg/JWT"
 	"app/news-parser/pkg/generate_random"
-	"app/news-parser/pkg/send_letter"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -31,7 +30,7 @@ func NewServiceAuth(repo *RepositoryAuth, dep *ServiceAuthDep) *ServiceAuth {
 		ServiceAuthDep: dep,
 	}
 }
-func (s *ServiceAuth) Register(body *RequestRegister) (*ResponseAuth, *custom_errors.Error) {
+func (s *ServiceAuth) Register(body *RequestRegister) (*common.ResponseAuth, *custom_errors.Error) {
 	if errUserExist := s.IRepoUser.IsUserExistByNameAndEmail(body.Name, body.Email); errUserExist != nil {
 		return nil, &custom_errors.Error{
 			Message: errUserExist.Error(),
@@ -41,7 +40,7 @@ func (s *ServiceAuth) Register(body *RequestRegister) (*ResponseAuth, *custom_er
 	hashPassword, errHashPass := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
 	if errHashPass != nil {
 		return nil, &custom_errors.Error{
-			Message: ErrFailedSecurity.Error(),
+			Message: custom_errors.ErrFailedSecurity.Error(),
 			Status:  http.StatusInternalServerError,
 		}
 	}
@@ -54,7 +53,7 @@ func (s *ServiceAuth) Register(body *RequestRegister) (*ResponseAuth, *custom_er
 	}
 	return respAuth, nil
 }
-func (s *ServiceAuth) Login(body *RequestLogin) (*ResponseAuth, *custom_errors.Error) {
+func (s *ServiceAuth) Login(body *RequestLogin) (*common.ResponseAuth, *custom_errors.Error) {
 	user, errGetUser := s.IRepoUser.GetUserByEmail(body.Email)
 	if errGetUser != nil {
 		return nil, &custom_errors.Error{
@@ -82,58 +81,45 @@ func (s *ServiceAuth) Login(body *RequestLogin) (*ResponseAuth, *custom_errors.E
 const (
 	actionRegister = "register"
 	actionLogin    = "login"
-
-	lengthTempCode = 6
-	lengthSession  = 9
 )
 
-func (s *ServiceAuth) authHelper(name, email, hashPass string) (*ResponseAuth, error) {
-	sessionId := generate_random.GenerateString(lengthSession)
-	tempCode := generate_random.GenerateNumbers(lengthTempCode)
-	if errSendEmail := s.sendEmailLetter(email, uint(tempCode)); errSendEmail != nil {
+func (s *ServiceAuth) authHelper(name, email, hashPass string) (*common.ResponseAuth, error) {
+	sessionId := generate_random.GenerateString(common.LengthSession)
+	tempCode := generate_random.GenerateNumbers(common.LengthTempCode)
+	if errSendEmail := common.SendEmailLetter(email, uint(tempCode), s.Configs); errSendEmail != nil {
 		return nil, errSendEmail
 	}
-	if errTempUserCreate := s.Repo.CreateTemporaryUser(&model.TemporaryUser{
+	if errTempUserCreate := s.Repo.CreateTemporaryUser(&model.TemporaryData{
 		Name:      name,
 		Email:     email,
 		Password:  hashPass,
 		TempCode:  uint(tempCode),
 		IDSession: sessionId,
 	}); errTempUserCreate != nil {
-		return nil, ErrFailedSecurity
+		return nil, custom_errors.ErrFailedSecurity
 	}
 	j := JWT.NewJWT(s.Signature)
 	token, errToken := j.CreateTemporaryJWT(sessionId)
 	if errToken != nil {
-		return nil, ErrFailedSecurity
+		return nil, custom_errors.ErrFailedSecurity
 	}
-	return &ResponseAuth{
-		Message: "we sent a letter to the specified email: " + email,
+	return &common.ResponseAuth{
+		Message: common.MessageEmail + email,
 		JWTTemp: token,
 	}, nil
 }
-func (s *ServiceAuth) sendEmailLetter(userEmail string, tempCode uint) error {
-	after := time.After(time.Second * 30)
-	letter := send_letter.NewSenderLetter(s.ApiEmail, s.ApiPassword, s.Address, s.AddressHost)
-	go letter.SendEmailLetter(userEmail, tempCode)
-	select {
-	case <-after:
-		return ErrSendLetter
-	case errSend := <-letter.ChErr:
-		return errSend
-	}
-}
+
 func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*ResponseConfirm, *custom_errors.Error) {
 	tempUser, errGetTempUser := s.Repo.GetTemporaryUser(sessionId)
 	if errGetTempUser != nil {
 		return nil, &custom_errors.Error{
-			Message: ErrExpiredSession.Error(),
+			Message: custom_errors.ErrSession.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
 	if tempUser.TempCode != tempCode {
 		return nil, &custom_errors.Error{
-			Message: ErrIncorrectCode.Error(),
+			Message: custom_errors.ErrIncorrectCode.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
@@ -162,7 +148,7 @@ func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*Respons
 		token, errJWTCreate := j.CreateJWT(uuId)
 		if errJWTCreate != nil {
 			return nil, &custom_errors.Error{
-				Message: ErrFailedSecurity.Error(),
+				Message: custom_errors.ErrFailedSecurity.Error(),
 				Status:  http.StatusInternalServerError,
 			}
 		}
@@ -180,7 +166,7 @@ func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*Respons
 		token, errJWTCreate := j.ParseTemporaryJWT(user.UUIDUser)
 		if errJWTCreate != nil {
 			return nil, &custom_errors.Error{
-				Message: ErrFailedSecurity.Error(),
+				Message: custom_errors.ErrFailedSecurity.Error(),
 				Status:  http.StatusInternalServerError,
 			}
 		}

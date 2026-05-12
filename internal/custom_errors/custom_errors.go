@@ -12,6 +12,10 @@ type Error struct {
 }
 
 var (
+	ErrIncorrectCode        = errors.New("the code is incorrect")
+	ErrSession            = errors.New("session is empty or time has expired")
+	ErrFailedSecurity     = errors.New("failed to secure the authorization session")
+	ErrSendLetter         = errors.New("we were unable to send a letter to the specified email")
 	ErrIncorrectArticleId = errors.New("incorrect article_ID format or empty")
 	ErrIncorrectWithText  = errors.New("the 'withText' must be a boolean is true or false")
 	ErrRecordNotFound     = errors.New("record not found")

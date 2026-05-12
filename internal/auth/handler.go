@@ -51,7 +51,7 @@ func (h *HandlerAuth) Register() http.HandlerFunc {
 		if errAuth.Message != "" {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
 			switch errAuth.Message {
-			case ErrFailedSecurity.Error():
+			case custom_errors.ErrFailedSecurity.Error():
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
 			default:
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
@@ -87,7 +87,7 @@ func (h *HandlerAuth) Login() http.HandlerFunc {
 		if errAuth.Message != "" {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
 			switch errAuth.Message {
-			case ErrFailedSecurity.Error():
+			case custom_errors.ErrFailedSecurity.Error():
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
 			default:
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
@@ -120,7 +120,7 @@ func (h *HandlerAuth) Confirm() http.HandlerFunc {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
 			return
 		}
-		body, errRequest := handler_request.HandlerRequest[RequestConfirm](request)
+		body, errRequest := handler_request.HandlerRequest[common.RequestConfirm](request)
 		if errRequest != nil {
 			switch errRequest {
 			case handler_request.ErrIncorrectFormat:
@@ -142,7 +142,7 @@ func (h *HandlerAuth) Confirm() http.HandlerFunc {
 		if errConfirm != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errConfirm)
 			switch errConfirm.Message {
-			case ErrSaveDataUser.Error(), ErrFailedSecurity.Error():
+			case ErrSaveDataUser.Error(), custom_errors.ErrFailedSecurity.Error():
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
 			default:
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)

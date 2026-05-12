@@ -27,7 +27,7 @@ const (
 
 func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		header := request.Header.Get("Authorization")
+		header := request.Header.Get("X-Temp-Token")
 		token, errToken := helperValidateToken(header)
 		if errToken != nil {
 			m.respError.Errors = append(m.respError.Errors, custom_errors.Error{
