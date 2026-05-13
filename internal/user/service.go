@@ -159,7 +159,7 @@ func (s *ServiceUser) helperSecurity(email, action string, bodyUpdate *RequestUp
 		}
 		return token, nil
 	}
-	return "", custom_errors.ErrIncorrectAction
+	return "", ErrIncorrectAction
 }
 func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uint) (*model.User, *custom_errors.Error) {
 	user, errGetUser := s.Repo.GetUserByUUID(userUUID)
@@ -217,6 +217,36 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 				}
 			}
 			return &resUser, nil
+		} else if tempData.Name != "" && tempData.Email == "" && tempData.Password != "" {
+			resUser := model.User{
+				Name:     tempData.Name,
+				Email:    user.Email,
+				Password: tempData.Password,
+				UUIDUser: userUUID,
+			}
+			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
+			if errUpdate != nil {
+				return nil, &custom_errors.Error{
+					Message: ErrUpdateUser.Error(),
+					Status:  http.StatusInternalServerError,
+				}
+			}
+			return &resUser, nil
+		} else if tempData.Name != "" && tempData.Email != "" && tempData.Password == "" {
+			resUser := model.User{
+				Name:     tempData.Name,
+				Email:    tempData.Email,
+				Password: user.Password,
+				UUIDUser: userUUID,
+			}
+			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
+			if errUpdate != nil {
+				return nil, &custom_errors.Error{
+					Message: ErrUpdateUser.Error(),
+					Status:  http.StatusInternalServerError,
+				}
+			}
+			return &resUser, nil
 		} else if tempData.Name == "" && tempData.Email != "" && tempData.Password != "" {
 			resUser := model.User{
 				Name:     user.Name,
@@ -251,14 +281,14 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 			}
 			return resUser, nil
 		}
-		return nil, &custom_errors.Error{
-			Message: handler_request.ErrInvalidData.Error(),
-			Status:  http.StatusBadRequest,
-		}
 	default:
 		return nil, &custom_errors.Error{
 			Message: ErrIncorrectAction.Error(),
 			Status:  http.StatusBadRequest,
 		}
+	}
+	return nil, &custom_errors.Error{
+		Message: handler_request.ErrInvalidData.Error(),
+		Status:  http.StatusBadRequest,
 	}
 }

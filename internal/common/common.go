@@ -89,12 +89,12 @@ func ParseString(str string) string {
 	return resStr
 }
 
+type RequestConfirm struct {
+	Code uint `json:"code" validate:"required"`
+}
 type ResponseAuth struct {
 	Message string `json:"message"`
 	JWTTemp string `json:"jwt-temp"`
-}
-type RequestConfirm struct {
-	Code uint `json:"code" validate:"required"`
 }
 
 func SendEmailLetter(userEmail string, tempCode uint, conf *configs.Configs) error {

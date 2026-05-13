@@ -13,3 +13,8 @@ type RequestLogin struct {
 type ResponseConfirm struct {
 	JWT string
 }
+
+type RequestRecovery struct {
+	Email       string `validate:"required"`
+	NewPassword string `json:"new-password"`
+}

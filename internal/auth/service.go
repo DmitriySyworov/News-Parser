@@ -53,7 +53,7 @@ func (s *ServiceAuth) Register(body *RequestRegister) (*common.ResponseAuth, *cu
 	}
 	return respAuth, nil
 }
-func (s *ServiceAuth) Login(body *RequestLogin) (*common.ResponseAuth, *custom_errors.Error) {
+func (s *ServiceAuth) Login(body *RequestLogin) (*ResponseConfirm, *custom_errors.Error) {
 	user, errGetUser := s.IRepoUser.GetUserByEmail(body.Email)
 	if errGetUser != nil {
 		return nil, &custom_errors.Error{
@@ -68,21 +68,79 @@ func (s *ServiceAuth) Login(body *RequestLogin) (*common.ResponseAuth, *custom_e
 			Status:  http.StatusUnauthorized,
 		}
 	}
-	respAuth, errAuth := s.authHelper(user.Name, user.Email, user.Password)
-	if errAuth != nil {
+	j := JWT.NewJWT(s.Signature)
+	token, errJWT := j.CreateJWT(user.UUIDUser)
+	if errJWT != nil {
 		return nil, &custom_errors.Error{
-			Message: errAuth.Error(),
+			Message: custom_errors.ErrFailedSecurity.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
-	return respAuth, nil
+	return &ResponseConfirm{
+		JWT: token,
+	}, nil
 }
 
 const (
-	actionRegister = "register"
-	actionLogin    = "login"
+	actionRegister         = "register"
+	actionRecoveryPassword = "recovery-password"
+	actionRecoveryRemove   = "recovery-remove"
 )
 
+func (s *ServiceAuth) Recovery(email, newPassword, action string) (*common.ResponseAuth, *custom_errors.Error) {
+	switch action {
+	case actionRecoveryRemove:
+		user, errGetUserByEmail := s.IRepoUser.GetRemoveUserByEmail(email)
+		if errGetUserByEmail != nil {
+			return nil, &custom_errors.Error{
+				Message: custom_errors.ErrUserNotExist.Error(),
+				Status:  http.StatusNotFound,
+			}
+		}
+		respAuth, errAuth := s.authHelper(user.Name, user.Email, user.Password)
+		if errAuth != nil {
+			return nil, &custom_errors.Error{
+				Message: custom_errors.ErrFailedSecurity.Error(),
+				Status:  http.StatusInternalServerError,
+			}
+		}
+		return respAuth, nil
+	case actionRecoveryPassword:
+		if newPassword == "" {
+			return nil, &custom_errors.Error{
+				Message: ErrNotNewPassword.Error(),
+				Status:  http.StatusUnauthorized,
+			}
+		}
+		hashedPass, errHashes := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if errHashes != nil {
+			return nil, &custom_errors.Error{
+				Message: custom_errors.ErrFailedSecurity.Error(),
+				Status:  http.StatusUnauthorized,
+			}
+		}
+		user, errGetByEmail := s.IRepoUser.GetUserByEmail(email)
+		if errGetByEmail != nil {
+			return nil, &custom_errors.Error{
+				Message: custom_errors.ErrUserNotExist.Error(),
+				Status:  http.StatusNotFound,
+			}
+		}
+		respAuth, errAuth := s.authHelper(user.Name, user.Email, string(hashedPass))
+		if errAuth != nil {
+			return nil, &custom_errors.Error{
+				Message: custom_errors.ErrFailedSecurity.Error(),
+				Status:  http.StatusInternalServerError,
+			}
+		}
+		return respAuth, nil
+	default:
+		return nil, &custom_errors.Error{
+			Message: ErrIncorrectActionRecovery.Error(),
+			Status:  http.StatusBadRequest,
+		}
+	}
+}
 func (s *ServiceAuth) authHelper(name, email, hashPass string) (*common.ResponseAuth, error) {
 	sessionId := generate_random.GenerateString(common.LengthSession)
 	tempCode := generate_random.GenerateNumbers(common.LengthTempCode)
@@ -109,7 +167,7 @@ func (s *ServiceAuth) authHelper(name, email, hashPass string) (*common.Response
 	}, nil
 }
 
-func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*ResponseConfirm, *custom_errors.Error) {
+func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseConfirm, *custom_errors.Error) {
 	tempUser, errGetTempUser := s.Repo.GetTemporaryUser(sessionId)
 	if errGetTempUser != nil {
 		return nil, &custom_errors.Error{
@@ -117,14 +175,14 @@ func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*Respons
 			Status:  http.StatusUnauthorized,
 		}
 	}
-	if tempUser.TempCode != tempCode {
+	if tempUser.TempCode != code {
 		return nil, &custom_errors.Error{
 			Message: custom_errors.ErrIncorrectCode.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
-	uuId := uuid.New().String()
 	j := JWT.NewJWT(s.Signature)
+	var UUID string
 	switch action {
 	case actionRegister:
 		if errUserExist := s.IRepoUser.IsUserExistByNameAndEmail(tempUser.Name, tempUser.Email); errUserExist != nil {
@@ -133,6 +191,7 @@ func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*Respons
 				Status:  http.StatusUnauthorized,
 			}
 		}
+		uuId := uuid.New().String()
 		user := &model.User{
 			Name:     tempUser.Name,
 			Email:    tempUser.Email,
@@ -145,38 +204,53 @@ func (s *ServiceAuth) Confirm(tempCode uint, action, sessionId string) (*Respons
 				Status:  http.StatusInternalServerError,
 			}
 		}
-		token, errJWTCreate := j.CreateJWT(uuId)
-		if errJWTCreate != nil {
+		UUID = uuId
+	case actionRecoveryRemove:
+		user, errGetUserByEmail := s.IRepoUser.GetRemoveUserByEmail(tempUser.Email)
+		if errGetUserByEmail != nil {
 			return nil, &custom_errors.Error{
-				Message: custom_errors.ErrFailedSecurity.Error(),
+				Message: custom_errors.ErrUserNotExist.Error(),
+				Status:  http.StatusNotFound,
+			}
+		}
+		errRecovery := s.IRepoUser.RecoveryUser(user.UUIDUser)
+		if errRecovery != nil {
+			return nil, &custom_errors.Error{
+				Message: ErrFailedRecovery.Error(),
 				Status:  http.StatusInternalServerError,
 			}
 		}
-		return &ResponseConfirm{
-			JWT: token,
-		}, nil
-	case actionLogin:
-		user, errGetUser := s.IRepoUser.GetUserByEmail(tempUser.Email)
-		if errGetUser != nil {
+		UUID = user.UUIDUser
+	case actionRecoveryPassword:
+		user, errGetByEmail := s.IRepoUser.GetUserByEmail(tempUser.Email)
+		if errGetByEmail != nil {
 			return nil, &custom_errors.Error{
-				Message: custom_errors.ErrRecordNotFound.Error(),
+				Message: custom_errors.ErrUserNotExist.Error(),
+				Status:  http.StatusNotFound,
+			}
+		}
+		_, errUpdate := s.IRepoUser.UpdateMyUserOneColumn(user.UUIDUser, "password", tempUser.Password)
+		if errUpdate != nil {
+			return nil, &custom_errors.Error{
+				Message: ErrFailedChangePassword.Error(),
 				Status:  http.StatusUnauthorized,
 			}
 		}
-		token, errJWTCreate := j.ParseTemporaryJWT(user.UUIDUser)
-		if errJWTCreate != nil {
-			return nil, &custom_errors.Error{
-				Message: custom_errors.ErrFailedSecurity.Error(),
-				Status:  http.StatusInternalServerError,
-			}
-		}
-		return &ResponseConfirm{
-			JWT: token,
-		}, nil
+		UUID = user.UUIDUser
 	default:
 		return nil, &custom_errors.Error{
-			Message: custom_errors.ErrIncorrectAction.Error(),
+			Message: ErrIncorrectActionConfirm.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
+	token, errJWTCreate := j.CreateJWT(UUID)
+	if errJWTCreate != nil {
+		return nil, &custom_errors.Error{
+			Message: custom_errors.ErrFailedSecurity.Error(),
+			Status:  http.StatusInternalServerError,
+		}
+	}
+	return &ResponseConfirm{
+		JWT: token,
+	}, nil
 }

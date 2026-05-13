@@ -34,6 +34,17 @@ func (r *RepositoryUser) IsUserExistByNameAndEmail(name, email string) error {
 	}
 	return nil
 }
+func (r *RepositoryUser) GetRemoveUserByEmail(email string) (*model.User, error) {
+	var user model.User
+	res := r.PostgresDb.
+		Unscoped().
+		Where("email = ? AND deleted_at IS NOT NULL", email).
+		First(&user)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &user, nil
+}
 func (r *RepositoryUser) IsUserExistByUUID(uuid string) bool {
 	res := r.PostgresDb.Where("uuid_user = ?", uuid).First(&model.User{})
 	if res.Error != nil {
@@ -64,7 +75,6 @@ func (r *RepositoryUser) GetUserByUUID(uuid string) (*model.User, error) {
 	return &user, nil
 }
 func (r *RepositoryUser) GetMyUser(uuid string) (*ResponseUser, error) {
-
 	var getUser ResponseUser
 	res := r.PostgresDb.
 		Model(&model.User{}).
@@ -76,7 +86,6 @@ func (r *RepositoryUser) GetMyUser(uuid string) (*ResponseUser, error) {
 	}
 	return &getUser, nil
 }
-
 func (r *RepositoryUser) UpdateMyUserOneColumn(userUUID, columnName, value string) (*model.User, error) {
 	var user model.User
 	res := r.PostgresDb.Model(&model.User{}).
@@ -87,6 +96,16 @@ func (r *RepositoryUser) UpdateMyUserOneColumn(userUUID, columnName, value strin
 		return nil, res.Error
 	}
 	return &user, nil
+}
+func (r *RepositoryUser) RecoveryUser(userUUID string) error {
+	res := r.PostgresDb.Model(&model.User{}).
+		Unscoped().
+		Where("uuid_user = ?", userUUID).
+		Update("deleted_at", nil)
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
 }
 func (r *RepositoryUser) UpdateMyUserFull(user *model.User) error {
 	res := r.PostgresDb.Where("uuid_user = ?", user.UUIDUser).Updates(&user)

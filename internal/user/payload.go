@@ -6,7 +6,7 @@ type RequestUpdateUser struct {
 	Name        string
 	NewEmail    string `validate:"omitempty,email,required_with=Password"`
 	Password    string
-	NewPassword string `validate:"omitempty,required_with=Password"`
+	NewPassword string `json:"new-password" validate:"omitempty,required_with=Password"`
 }
 type RequestRemoveOrDelete struct {
 	Password string `validate:"required"`
