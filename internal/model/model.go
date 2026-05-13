@@ -6,6 +6,11 @@ import (
 	"gorm.io/gorm"
 )
 
+type BaseModel struct {
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
 type ArticleArchive struct {
 	Header      string `gorm:"not null"`
 	URL         string `gorm:"unique,not null"`
@@ -17,21 +22,22 @@ type ArticleArchive struct {
 	Error       string `gorm:"-"`
 }
 type User struct {
-	*gorm.Model
+	*BaseModel
 	Name        string        `gorm:"unique;not null"`
 	Email       string        `gorm:"unique;not null"`
 	Password    string        `gorm:"not null"`
-	UUIDUser    string        `gorm:"unique;not null;primaryKey"`
+	UUIDUser    string        `gorm:"type:text;primaryKey"`
 	UserArticle []UserArticle `gorm:"foreignKey:UUIDUser;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }
+
 type UserArticle struct {
-	*gorm.Model
+	*BaseModel
 	Header    string
 	URL       string
 	Text      string
 	Category  string
-	IDArticle uint   `gorm:"type:text;unique;not null"`
-	UUIDUser  string `gorm:"not null"`
+	IDArticle uint   `gorm:"unique;not null"`
+	UUIDUser  string `gorm:"type:text"`
 	Error     string `gorm:"-"`
 }
 type CategoryStat struct {

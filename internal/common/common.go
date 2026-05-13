@@ -105,6 +105,9 @@ func SendEmailLetter(userEmail string, tempCode uint, conf *configs.Configs) err
 	case <-after:
 		return custom_errors.ErrSendLetter
 	case errSend := <-letter.ChErr:
-		return errSend
+		if errSend != nil {
+			return errSend
+		}
+		return nil
 	}
 }

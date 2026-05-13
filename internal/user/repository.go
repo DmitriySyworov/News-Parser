@@ -25,8 +25,11 @@ func NewRepositoryUser(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) *Re
 }
 func (r *RepositoryUser) IsUserExistByNameAndEmail(name, email string) error {
 	resName := r.PostgresDb.Where("name = ?", name).First(&model.User{})
+	if resName == nil {
+		return custom_errors.ErrUserExist
+	}
 	resEmail := r.PostgresDb.Where("email = ?", email).First(&model.User{})
-	if resName.Error == nil || resEmail.Error == nil {
+	if resEmail.Error == nil {
 		return custom_errors.ErrUserExist
 	}
 	return nil
@@ -61,6 +64,7 @@ func (r *RepositoryUser) GetUserByUUID(uuid string) (*model.User, error) {
 	return &user, nil
 }
 func (r *RepositoryUser) GetMyUser(uuid string) (*ResponseUser, error) {
+
 	var getUser ResponseUser
 	res := r.PostgresDb.
 		Model(&model.User{}).

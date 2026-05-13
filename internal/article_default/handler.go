@@ -27,6 +27,10 @@ func NewHandlerArticle(router *http.ServeMux, dep *HandlerArticleDep) {
 }
 func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
 		category := request.PathValue("category")
 		offsetStr := request.URL.Query().Get("offset")
 		limitStr := request.URL.Query().Get("limit")
@@ -49,6 +53,10 @@ func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
 }
 func (h *HandlerArticle) GetArticleToday() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
 		idStr := request.PathValue("id")
 		if len(idStr) != lengthIdArticle {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
@@ -59,7 +67,7 @@ func (h *HandlerArticle) GetArticleToday() http.HandlerFunc {
 			return
 		}
 		article, errGetArticle := h.Dep.ServiceArticle.GetArticleToday(idStr)
-		if errGetArticle.Message != "" {
+		if errGetArticle != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errGetArticle)
 			if errGetArticle.Message == ErrLoadArticles.Error() {
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
@@ -74,6 +82,10 @@ func (h *HandlerArticle) GetArticleToday() http.HandlerFunc {
 	}
 }
 func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
+	defer func() {
+		h.ResponseError = custom_errors.ResponseError{}
+		h.ResponseSuccessful = common.ResponseSuccessful{}
+	}()
 	return func(writer http.ResponseWriter, request *http.Request) {
 		category := request.PathValue("category")
 		offsetStr := request.URL.Query().Get("offset")
@@ -82,8 +94,8 @@ func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
 		articlesArchive, errGetArchive := h.Dep.ServiceArticle.GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr)
 		if len(errGetArchive) != 0 {
 			h.ResponseError.Errors = errGetArchive
-			if len(errGetArchive) == 1 && errGetArchive[0].Message == ErrNotFoundArticle.Error() {
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusNotFound)
+			if len(errGetArchive) == 1 {
+				handler_response.HandlerResponse(writer, h.ResponseError, errGetArchive[0].Status)
 			} else {
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			}
@@ -95,6 +107,10 @@ func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
 	}
 }
 func (h *HandlerArticle) GetArchiveArticle() http.HandlerFunc {
+	defer func() {
+		h.ResponseError = custom_errors.ResponseError{}
+		h.ResponseSuccessful = common.ResponseSuccessful{}
+	}()
 	return func(writer http.ResponseWriter, request *http.Request) {
 		uuid := request.PathValue("uuid")
 		if uuid == "" {
@@ -106,7 +122,7 @@ func (h *HandlerArticle) GetArchiveArticle() http.HandlerFunc {
 			return
 		}
 		archArticle, errGetArchArticle := h.Dep.ServiceArticle.GetArchiveArticle(uuid)
-		if errGetArchArticle.Message != "" {
+		if errGetArchArticle != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errGetArchArticle)
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusNotFound)
 			return

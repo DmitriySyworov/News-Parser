@@ -29,6 +29,10 @@ func NewHandlerAuth(router *http.ServeMux, dep *HandlerAuthDep) {
 }
 func (h *HandlerAuth) Register() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
 		body, errRequest := handler_request.HandlerRequest[RequestRegister](request)
 		if errRequest != nil {
 			switch errRequest {
@@ -48,7 +52,7 @@ func (h *HandlerAuth) Register() http.HandlerFunc {
 			return
 		}
 		respAuth, errAuth := h.Dep.Register(body)
-		if errAuth.Message != "" {
+		if errAuth != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
 			switch errAuth.Message {
 			case custom_errors.ErrFailedSecurity.Error():
@@ -65,6 +69,10 @@ func (h *HandlerAuth) Register() http.HandlerFunc {
 }
 func (h *HandlerAuth) Login() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
 		body, errRequest := handler_request.HandlerRequest[RequestLogin](request)
 		if errRequest != nil {
 			switch errRequest {
@@ -84,7 +92,7 @@ func (h *HandlerAuth) Login() http.HandlerFunc {
 			return
 		}
 		respAuth, errAuth := h.Dep.Login(body)
-		if errAuth.Message != "" {
+		if errAuth != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
 			switch errAuth.Message {
 			case custom_errors.ErrFailedSecurity.Error():
@@ -101,6 +109,10 @@ func (h *HandlerAuth) Login() http.HandlerFunc {
 }
 func (h *HandlerAuth) Confirm() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
 		action := request.URL.Query().Get("action")
 		if action != actionLogin && action != actionRegister {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
@@ -110,8 +122,8 @@ func (h *HandlerAuth) Confirm() http.HandlerFunc {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			return
 		}
-		valueCtx := request.Context().Value(middleware.KeySessionJWT)
-		sessionId, ok := valueCtx.(string)
+		valueCtx := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := valueCtx.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -138,7 +150,7 @@ func (h *HandlerAuth) Confirm() http.HandlerFunc {
 			}
 			return
 		}
-		respConfirm, errConfirm := h.Dep.Confirm(body.Code, action, sessionId)
+		respConfirm, errConfirm := h.Dep.Confirm(body.Code, action, ctxTokens.SessionID)
 		if errConfirm != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errConfirm)
 			switch errConfirm.Message {

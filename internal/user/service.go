@@ -166,7 +166,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 	if errGetUser != nil {
 		return nil, &custom_errors.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
-			Status:  http.StatusInternalServerError,
+			Status:  http.StatusNotFound,
 		}
 	}
 	tempData, errGetSession := s.Repo.GetSession(sessionID, action)

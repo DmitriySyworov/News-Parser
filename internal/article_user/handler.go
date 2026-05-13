@@ -34,8 +34,12 @@ func NewHandlerArticleUser(router *http.ServeMux, dep *HandlerArticleUserDep) {
 }
 func (h *HandlerArticleUser) CreateUserArticles() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -60,7 +64,7 @@ func (h *HandlerArticleUser) CreateUserArticles() http.HandlerFunc {
 				})
 			}
 		}
-		sliceUserArticles, errCreateUserArt := h.Dep.CreateUserArticles(body, userUUID, addText)
+		sliceUserArticles, errCreateUserArt := h.Dep.CreateUserArticles(body, ctxTokens.UUID, addText)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errCreateUserArt...)
 		if len(h.ResponseError.Errors) != 0 {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
@@ -73,8 +77,12 @@ func (h *HandlerArticleUser) CreateUserArticles() http.HandlerFunc {
 }
 func (h *HandlerArticleUser) UpdateUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{Message: custom_errors.ErrIncorrectToken.Error(), Status: http.StatusUnauthorized})
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
@@ -98,7 +106,7 @@ func (h *HandlerArticleUser) UpdateUserArticle() http.HandlerFunc {
 				})
 			}
 		}
-		updateArticle, errSliceUpdate := h.Dep.UpdateUserArticle(body.Category, userUUID, id, addText, deleteText)
+		updateArticle, errSliceUpdate := h.Dep.UpdateUserArticle(body.Category, ctxTokens.UUID, id, addText, deleteText)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errSliceUpdate...)
 		if len(h.ResponseError.Errors) != 0 {
 			if len(h.ResponseError.Errors) == 1 && h.ResponseError.Errors[0].Message == ErrNotFoundUserArticle.Error() {
@@ -119,8 +127,12 @@ func (h *HandlerArticleUser) UpdateUserArticle() http.HandlerFunc {
 }
 func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{Message: custom_errors.ErrIncorrectToken.Error(), Status: http.StatusUnauthorized})
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
@@ -143,7 +155,7 @@ func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 				})
 			}
 		}
-		updateBatchArticle, errSliceUpdate := h.Dep.UpdateBatchUserArticles(body.Domain, userUUID, addText, deleteText)
+		updateBatchArticle, errSliceUpdate := h.Dep.UpdateBatchUserArticles(body.Domain, ctxTokens.UUID, addText, deleteText)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errSliceUpdate...)
 		if len(h.ResponseError.Errors) != 0 {
 			if len(h.ResponseError.Errors) == 1 && h.ResponseError.Errors[0].Message == ErrNotFoundUserArticle.Error() {
@@ -160,8 +172,12 @@ func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 }
 func (h *HandlerArticleUser) GetUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -171,7 +187,7 @@ func (h *HandlerArticleUser) GetUserArticle() http.HandlerFunc {
 			return
 		}
 		idArticleStr := request.PathValue("id")
-		userArticle, errGetUserArt := h.Dep.GetUserArticle(userUUID, idArticleStr)
+		userArticle, errGetUserArt := h.Dep.GetUserArticle(ctxTokens.UUID, idArticleStr)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errGetUserArt...)
 		if len(h.ResponseError.Errors) != 0 {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
@@ -184,8 +200,12 @@ func (h *HandlerArticleUser) GetUserArticle() http.HandlerFunc {
 }
 func (h *HandlerArticleUser) GetAllUserArticles() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -198,7 +218,7 @@ func (h *HandlerArticleUser) GetAllUserArticles() http.HandlerFunc {
 		offset := request.URL.Query().Get("offset")
 		limit := request.URL.Query().Get("limit")
 		withText := request.URL.Query().Get("withText")
-		respUserArticles, errGetArticles := h.Dep.GetAllUserArticles(userUUID, category, offset, limit, withText)
+		respUserArticles, errGetArticles := h.Dep.GetAllUserArticles(ctxTokens.UUID, category, offset, limit, withText)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errGetArticles...)
 		if len(h.ResponseError.Errors) != 0 {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
@@ -211,8 +231,12 @@ func (h *HandlerArticleUser) GetAllUserArticles() http.HandlerFunc {
 }
 func (h *HandlerArticleUser) RemoveUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -223,7 +247,7 @@ func (h *HandlerArticleUser) RemoveUserArticle() http.HandlerFunc {
 		}
 		idArticle := request.PathValue("id")
 		allArticleStr := request.URL.Query().Get("allArticle")
-		errRemoveUserArt := h.Dep.RemoveUserArticle(idArticle, userUUID, allArticleStr)
+		errRemoveUserArt := h.Dep.RemoveUserArticle(idArticle, ctxTokens.UUID, allArticleStr)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errRemoveUserArt...)
 		if len(h.ResponseError.Errors) != 0 {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
@@ -234,8 +258,12 @@ func (h *HandlerArticleUser) RemoveUserArticle() http.HandlerFunc {
 }
 func (h *HandlerArticleUser) GetRemoveUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -246,7 +274,7 @@ func (h *HandlerArticleUser) GetRemoveUserArticle() http.HandlerFunc {
 		}
 		offset := request.URL.Query().Get("offset")
 		limit := request.URL.Query().Get("limit")
-		respRemoveArticles, errGetRemoveArticles := h.Dep.GetRemoveUserArticle(userUUID, offset, limit)
+		respRemoveArticles, errGetRemoveArticles := h.Dep.GetRemoveUserArticle(ctxTokens.UUID, offset, limit)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errGetRemoveArticles...)
 		if len(h.ResponseError.Errors) != 0 {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
@@ -259,8 +287,12 @@ func (h *HandlerArticleUser) GetRemoveUserArticle() http.HandlerFunc {
 }
 func (h *HandlerArticleUser) RecoveryUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		valueCtx := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := valueCtx.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -271,7 +303,7 @@ func (h *HandlerArticleUser) RecoveryUserArticle() http.HandlerFunc {
 		}
 		id := request.PathValue("id")
 		allArticle := request.URL.Query().Get("allArticle")
-		respRecoveryArticle, errRecoveryArticle := h.Dep.RecoveryUserArticle(userUUID, id, allArticle)
+		respRecoveryArticle, errRecoveryArticle := h.Dep.RecoveryUserArticle(ctxTokens.UUID, id, allArticle)
 		h.ResponseError.Errors = append(h.ResponseError.Errors, errRecoveryArticle...)
 		if len(h.ResponseError.Errors) != 0 {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)

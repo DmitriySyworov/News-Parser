@@ -73,7 +73,7 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category
 	var sliceUserArticle []model.UserArticle
 	if category == "" {
 		res := r.PostgresDb.
-			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
                     WHERE uuid_user = ?
 					OFFSET ?
 					LIMIT ?
@@ -84,7 +84,7 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category
 		}
 	} else {
 		res := r.PostgresDb.
-			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
                     WHERE uuid_user = ? AND category = ?
 					OFFSET ?
 					LIMIT ?
@@ -105,7 +105,7 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category st
 	var sliceUserArticle []model.UserArticle
 	if category == "" {
 		res := r.PostgresDb.
-			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
                     WHERE uuid_user = ?
 					OFFSET ?
 					LIMIT ?
@@ -116,7 +116,7 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category st
 		}
 	} else {
 		res := r.PostgresDb.
-			Raw(`SELECT id, created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
                     WHERE  uuid_user = ? AND category = ?
 					OFFSET ?
 					LIMIT ?

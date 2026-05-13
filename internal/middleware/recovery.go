@@ -18,6 +18,7 @@ func (m *ManagerMiddleware) RecoveryPanic(next http.Handler) http.Handler {
 					Status:  http.StatusInternalServerError,
 				})
 				handler_response.HandlerResponse(writer, m.respError, http.StatusInternalServerError)
+				m.respError = custom_errors.ResponseError{}
 			}
 		}()
 		next.ServeHTTP(writer, request)

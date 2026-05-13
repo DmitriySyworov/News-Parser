@@ -26,12 +26,16 @@ func NewHandlerUser(router *http.ServeMux, dep *HandlerUserDep) {
 	router.Handle("GET /my/user/get", dep.IsAuthJWT(user.GetMyUser()))
 	router.Handle("PATCH /my/user/update", dep.IsAuthJWT(user.UpdateMyUser()))
 	router.Handle("DELETE /my/user/remove", dep.IsAuthJWT(user.RemoveMyUser()))
-	router.Handle("POST /my/user/confirm", dep.IsAuthJWT(user.ConfirmMyUser()))
+	router.Handle("POST /my/user/confirm", dep.IsAuthJWT(dep.IsTemporaryJWT(user.ConfirmMyUser())))
 }
 func (h *HandlerUser) GetMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		ctxValue := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := ctxValue.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -40,7 +44,7 @@ func (h *HandlerUser) GetMyUser() http.HandlerFunc {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
 			return
 		}
-		myUser, errGetMyUser := h.ServiceUser.Repo.GetMyUser(userUUID)
+		myUser, errGetMyUser := h.ServiceUser.Repo.GetMyUser(ctxTokens.UUID)
 		if errGetMyUser != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrUserNotExist.Error(),
@@ -56,8 +60,12 @@ func (h *HandlerUser) GetMyUser() http.HandlerFunc {
 }
 func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		ctxValue := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := ctxValue.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -88,13 +96,15 @@ func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 				Status:  http.StatusBadRequest,
 			})
 		}
-		respAuth, errRemoveSlice := h.ServiceUser.RemoveMyUser(userUUID, body.Password, typeRemove)
-		h.ResponseError.Errors = append(h.ResponseError.Errors, *errRemoveSlice)
-		if len(h.ResponseError.Errors) != 0 {
-			if len(h.ResponseError.Errors) == 1 && h.ResponseError.Errors[1].Message == ErrIncorrectPassword.Error() {
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
-			} else {
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+		respAuth, errRemove := h.ServiceUser.RemoveMyUser(ctxTokens.UUID, body.Password, typeRemove)
+		if errRemove != nil {
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errRemove)
+			if len(h.ResponseError.Errors) != 0 {
+				if len(h.ResponseError.Errors) == 1 {
+					handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
+				} else {
+					handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+				}
 			}
 			return
 		}
@@ -105,8 +115,12 @@ func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 }
 func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		ctxValue := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, ok := ctxValue.(string)
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
 		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -130,15 +144,17 @@ func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 				})
 			}
 		}
-		updateUser, respAuth, errUpdate := h.ServiceUser.UpdateMyUser(body, userUUID)
-		h.ResponseError.Errors = append(h.ResponseError.Errors, *errUpdate)
-		if len(h.ResponseError.Errors) != 0 {
-			if len(h.ResponseError.Errors) == 1 {
-				handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
-			} else {
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+		updateUser, respAuth, errUpdate := h.ServiceUser.UpdateMyUser(body, ctxTokens.UUID)
+		if errUpdate != nil {
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errUpdate)
+			if len(h.ResponseError.Errors) != 0 {
+				if len(h.ResponseError.Errors) == 1 {
+					handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
+				} else {
+					handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+				}
+				return
 			}
-			return
 		}
 		h.ResponseSuccessful.Success = true
 		if respAuth != nil {
@@ -151,19 +167,13 @@ func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 }
 func (h *HandlerUser) ConfirmMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		ctxValue := request.Context().Value(middleware.KeyAuthToken)
-		userUUID, okUUID := ctxValue.(string)
-		if !okUUID {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-				Message: custom_errors.ErrIncorrectToken.Error(),
-				Status:  http.StatusUnauthorized,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
-			return
-		}
-		ctxValueTemp := request.Context().Value(middleware.KeyAuthToken)
-		sessionID, okSession := ctxValueTemp.(string)
-		if !okSession {
+		defer func() {
+			h.ResponseError = custom_errors.ResponseError{}
+			h.ResponseSuccessful = common.ResponseSuccessful{}
+		}()
+		ctxValue := request.Context().Value(middleware.KeyContext)
+		ctxTokens, ok := ctxValue.(middleware.ContextToken)
+		if !ok {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
 				Status:  http.StatusUnauthorized,
@@ -193,15 +203,17 @@ func (h *HandlerUser) ConfirmMyUser() http.HandlerFunc {
 				Status:  http.StatusBadRequest,
 			})
 		}
-		respConfirm, errConfirm := h.ServiceUser.ConfirmMyUser(userUUID, sessionID, action, body.Code)
-		h.ResponseError.Errors = append(h.ResponseError.Errors, *errConfirm)
-		if len(h.ResponseError.Errors) != 0 {
-			if len(h.ResponseError.Errors) == 1 {
-				handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
-			} else {
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+		respConfirm, errConfirm := h.ServiceUser.ConfirmMyUser(ctxTokens.UUID, ctxTokens.SessionID, action, body.Code)
+		if errConfirm != nil {
+			h.ResponseError.Errors = append(h.ResponseError.Errors, *errConfirm)
+			if len(h.ResponseError.Errors) != 0 {
+				if len(h.ResponseError.Errors) == 1 {
+					handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
+				} else {
+					handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+				}
+				return
 			}
-			return
 		}
 		if action == actionUpdate {
 			h.ResponseSuccessful.Success = true
