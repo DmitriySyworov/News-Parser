@@ -41,7 +41,7 @@ func main() {
 	go serviceArticle.ReplacementInfo()
 	go serviceStat.PushInStat()
 	go serviceArticleUser.DeletingRemoveUserArticle()
-	//go serviceUser.
+	go serviceUser.DeletingRemoveUser()
 	//handlers
 	auth.NewHandlerAuth(router, &auth.HandlerAuthDep{ServiceAuth: serviceAuth, ManagerMiddleware: managerMiddleware})
 	user.NewHandlerUser(router, &user.HandlerUserDep{ServiceUser: serviceUser, ManagerMiddleware: managerMiddleware})

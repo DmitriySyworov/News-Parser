@@ -6,6 +6,7 @@ import (
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/open_Db"
 	"context"
+	"log"
 	"strconv"
 	"time"
 
@@ -197,4 +198,28 @@ func (r *RepositoryUser) DeleteMyUser(userUUID string) error {
 		return res.Error
 	}
 	return nil
+}
+
+type deleteUsersDTO struct {
+	UUIDUser  string
+	DeletedAt time.Time
+}
+
+func (r *RepositoryUser) deleteExpiredUser() {
+	var sliceUser []deleteUsersDTO
+	res := r.PostgresDb.Raw(`SELECT uuid_user, deleted_at FROM users
+							  WHERE deleted_at IS NOT NULL`).
+		Scan(&sliceUser)
+	if res.Error != nil {
+		log.Println(res.Error)
+	}
+	now := time.Now().Unix()
+	for _, user := range sliceUser {
+		if now-user.DeletedAt.Unix()-common.UnixMonth > 0 {
+			r.PostgresDb.
+				Unscoped().
+				Where("uuid_user = ?", user.UUIDUser).
+				Delete(&model.User{})
+		}
+	}
 }

@@ -39,8 +39,8 @@ func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
 		allArticle, errGetAllArticle := h.Dep.ServiceArticle.GetArticlesInCategoryToday(category, offsetStr, limitStr, filterArticles, withText)
 		if len(errGetAllArticle) != 0 {
 			h.ResponseError.Errors = errGetAllArticle
-			if len(errGetAllArticle) == 1 && errGetAllArticle[0].Message == ErrLoadArticles.Error() {
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
+			if len(errGetAllArticle) == 1 && errGetAllArticle[0].Message == ErrNotFoundArticle.Error() {
+				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusNotFound)
 			} else {
 				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			}

@@ -5,6 +5,7 @@ import (
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
 	"app/news-parser/internal/model"
+	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
@@ -65,6 +66,7 @@ func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, uuid
 		go customParsing.createUserArticlesWithoutText()
 		defer wg.Wait()
 		for customArticle := range customParsing.ArticleUserCh {
+			fmt.Println(customArticle)
 			sliceUserArticle = append(sliceUserArticle, customArticle)
 		}
 	}
@@ -344,7 +346,7 @@ func (s *ServiceArticleUser) GetUserArticle(userUUID, idArticleStr string) (*mod
 	if !s.Dep.IRepoUser.IsUserExistByUUID(userUUID) {
 		sliceError = append(sliceError, custom_errors.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
-			Status:  http.StatusUnauthorized,
+			Status:  http.StatusNotFound,
 		})
 	}
 	idArticle, errParseId := strconv.Atoi(idArticleStr)
@@ -360,7 +362,7 @@ func (s *ServiceArticleUser) GetUserArticle(userUUID, idArticleStr string) (*mod
 	if userArticle, errGetUserArt := s.Repo.GetUserArticle(userUUID, uint(idArticle)); errGetUserArt != nil {
 		sliceError = append(sliceError, custom_errors.Error{
 			Message: ErrNotFoundUserArticle.Error(),
-			Status:  http.StatusBadRequest,
+			Status:  http.StatusNotFound,
 		})
 		return nil, sliceError
 	} else {

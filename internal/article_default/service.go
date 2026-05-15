@@ -82,8 +82,8 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, offset, limit, filter, withText)
 	if errGetAllArticle != nil {
 		sliceError = append(sliceError, custom_errors.Error{
-			Message: errGetAllArticle.Error(),
-			Status:  http.StatusInternalServerError,
+			Message: ErrNotFoundArticle.Error(),
+			Status:  http.StatusNotFound,
 		})
 		return nil, sliceError
 	}
@@ -183,7 +183,7 @@ func validateCategories(category string) bool {
 	return false
 }
 func (s *ServiceArticle) ReplacementInfo() {
-	tickerEveryDay := time.NewTicker(24 * time.Hour)
+	tickerEveryDay := time.NewTicker(common.Day)
 	tickerCheckEmpty := time.NewTicker(20 * time.Second) //!!!
 	defer tickerEveryDay.Stop()
 	defer tickerCheckEmpty.Stop()
@@ -262,21 +262,90 @@ func (s *ServiceArticle) loadNewInfo() {
 		log.Println(errLinkList)
 		return
 	}
+	var wg sync.WaitGroup
 	for _, list := range linksList {
-		data := strings.Split(list, " ")
-		var wg sync.WaitGroup
-		parse := NewParsing(&wg, s.repo)
-		wg.Add(3 * len(linksList))
-		go parse.parseCategory(data[0], data[1])
-		go parse.parseArticle(data[1])
-		go parse.createRdb(data[1])
-		defer func() {
-			wg.Wait()
-		}()
+		data := strings.Split(list, ">")
+		//timeout, cancel := context.WithTimeout(context.Background(), time.Second*120) //!!
+		//defer cancel()
+		parse := NewParsing(&wg, s.repo) //, timeout)
+		wg.Add(3)
+
+		go func(url, category, domain, flagText, isArticleOnHeader string) {
+			defer wg.Done()
+			parse.parseCategory(url, category, domain, flagText, isArticleOnHeader)
+			close(parse.LinkCh)
+			//select {
+			//case <-parse.Timeout.Done():
+			//	return
+			//}
+		}(data[0], data[1], data[2], data[5], data[6])
+
+		go func(domain, startWord, stopWord string) {
+			defer wg.Done()
+			parse.parseArticle(domain, startWord, stopWord)
+			close(parse.IsOk)
+			close(parse.ArticleCh)
+			//select {
+			//case <-parse.Timeout.Done():
+			//	return
+			//}
+		}(data[2], data[3], data[4])
+
+		go func(category string) {
+			defer wg.Done()
+			parse.createRdb(category)
+			//select {
+			//case <-parse.Timeout.Done():
+			//	return
+			//}
+		}(data[1])
 	}
+	wg.Wait()
 }
+
+//var wg sync.WaitGroup
+//for _, list := range linksList {
+//	data := strings.Split(list, " ")
+//	parse := NewParsing(&wg, s.repo)
+//	wg.Add(3)
+//
+//	go func(url, category, domain, flagText string) {
+//		defer wg.Done()
+//		parse.parseCategory(url, category, domain, flagText)
+//		close(parse.LinkCh)
+//	}(data[0], data[1], data[2], data[5])
+//
+//	go func(category, domain, startWord, stopWord string) {
+//		defer wg.Done()
+//		parse.parseArticle(category, domain, startWord, stopWord)
+//		close(parse.IsOk)
+//		close(parse.ArticleCh)
+//	}(data[1], data[2], data[3], data[4])
+//
+//	go func(category string) {
+//		defer wg.Done()
+//		parse.createRdb(category)
+//	}(data[1])
+//
+//}
+//wg.Wait()
+//chFinish <- true
+
+//	for _, list := range linksList {
+//		fmt.Println(list)
+//		data := strings.Split(list, " ")
+//		var wg sync.WaitGroup
+//		parse := NewParsing(&wg, s.repo)
+//		wg.Add(3)
+//		go parse.parseCategory(data[0], data[1])
+//		go parse.parseArticle(data[1])
+//		go parse.createRdb(data[1])
+//		defer func() {
+//			wg.Wait()
+//		}()
+//	}
 func (s *ServiceArticle) RemoveUserArticles() {
-	ticker := time.NewTicker(time.Hour * 24)
+	ticker := time.NewTicker(common.Day)
 	defer ticker.Stop()
 	select {
 	case <-ticker.C:

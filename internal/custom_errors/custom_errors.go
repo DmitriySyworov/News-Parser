@@ -12,6 +12,8 @@ type Error struct {
 }
 
 var (
+	ErrNegativeOffset     = errors.New("offset cannot be less than zero")
+	ErrNegativeLimit      = errors.New("limit cannot be less than zero")
 	ErrIncorrectCode      = errors.New("the code is incorrect")
 	ErrSession            = errors.New("session is empty or time has expired")
 	ErrFailedSecurity     = errors.New("failed to secure the authorization session")

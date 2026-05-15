@@ -34,11 +34,6 @@ func NewCustomParsing(wg *sync.WaitGroup, repo *RepositoryArticleUser) *CustomPa
 }
 func (cp *CustomParse) customParseCategory(url, category, uuid string, isText bool) {
 	defer cp.recoveryCustomGoroutine()
-	after := time.After(time.Second * 10)
-	select {
-	case <-after:
-
-	}
 	response, errResp := http.Get(url)
 	if errResp != nil {
 		cp.LinkUserCh <- model.UserArticle{Error: errResp.Error()}

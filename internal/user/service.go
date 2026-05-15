@@ -9,6 +9,7 @@ import (
 	"app/news-parser/pkg/generate_random"
 	"app/news-parser/pkg/handler_request"
 	"net/http"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -290,5 +291,13 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 	return nil, &custom_errors.Error{
 		Message: handler_request.ErrInvalidData.Error(),
 		Status:  http.StatusBadRequest,
+	}
+}
+func (s *ServiceUser) DeletingRemoveUser() {
+	ticker := time.NewTicker(time.Hour * 24)
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+		s.Repo.deleteExpiredUser()
 	}
 }
