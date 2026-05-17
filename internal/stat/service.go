@@ -5,6 +5,7 @@ import (
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/pkg/event_bus"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -22,16 +23,22 @@ func NewServiceStat(repo *RepositoryStat, dep *ServiceStatDep) *ServiceStat {
 		ServiceStatDep: dep,
 	}
 }
-func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCategoryDate, error) {
+func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCategoryDate, *custom_errors.Error) {
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
-		return nil, custom_errors.ErrIncorrectDate
+		return nil, &custom_errors.Error{
+			Message: ErrIncorrectDate.Error(),
+			Status:  http.StatusBadRequest,
+		}
 	}
 	place := 0
 	if date == common.DateNow() {
 		statCategoryToday, errGetToday := s.Repo.GetStatCategoryToday()
 		if errGetToday != nil || len(statCategoryToday) == 0 {
-			return nil, ErrStatLoad
+			return nil, &custom_errors.Error{
+				Message: ErrStatLoad.Error(),
+				Status:  http.StatusNotFound,
+			}
 		}
 		var sliceRespDb []CategoryDbDate
 		for _, stToday := range statCategoryToday {
@@ -39,7 +46,10 @@ func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCatego
 			var dbResp CategoryDbDate
 			category, ok := stToday.Member.(string)
 			if !ok {
-				return nil, ErrStatLoad
+				return nil, &custom_errors.Error{
+					Message: ErrStatLoad.Error(),
+					Status:  http.StatusNotFound,
+				}
 			}
 			dbResp.Category = category
 			dbResp.Date = date
@@ -53,27 +63,29 @@ func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCatego
 	} else {
 		statCategories, errGetStat := s.Repo.GetStatCategoryByDate(date)
 		if errGetStat != nil {
-			return nil, errGetStat
+			return nil, &custom_errors.Error{
+				Message: ErrStatLoad.Error(),
+				Status:  http.StatusNotFound,
+			}
 		}
 		return statCategories, nil
 	}
 }
-func (s *ServiceStat) GetStatCategoryAllTime() (*ResponseStatCategoryAll, error) {
-	allTimeStat, errGetAllTime := s.Repo.GetStatCategoryAllTime()
-	if errGetAllTime != nil {
-		return nil, ErrStatLoad
-	}
-	return allTimeStat, nil
-}
-func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticleDate, error) {
+func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticleDate, *custom_errors.Error) {
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
-		return nil, custom_errors.ErrIncorrectDate
+		return nil, &custom_errors.Error{
+			Message: ErrIncorrectDate.Error(),
+			Status:  http.StatusBadRequest,
+		}
 	}
 	if date == common.DateNow() {
 		statArticleToday, errGetToday := s.Repo.GetStatArticleToday()
 		if errGetToday != nil || len(statArticleToday) == 0 {
-			return nil, ErrStatLoad
+			return nil, &custom_errors.Error{
+				Message: ErrStatLoad.Error(),
+				Status:  http.StatusNotFound,
+			}
 		}
 		var sliceRespDb []ArticleDbDate
 		place := 0
@@ -82,7 +94,10 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 			var dbResp ArticleDbDate
 			url, ok := stToday.Member.(string)
 			if !ok {
-				return nil, ErrStatLoad
+				return nil, &custom_errors.Error{
+					Message: ErrStatLoad.Error(),
+					Status:  http.StatusNotFound,
+				}
 			}
 			dbResp.URL = url
 			dbResp.Date = date
@@ -96,17 +111,13 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 	} else {
 		statCategories, errGetStat := s.Repo.GetStatArticleByDate(date)
 		if errGetStat != nil {
-			return nil, errGetStat
+			return nil, &custom_errors.Error{
+				Message: ErrStatLoad.Error(),
+				Status:  http.StatusNotFound,
+			}
 		}
 		return statCategories, nil
 	}
-}
-func (s *ServiceStat) GetStatArticleAllTime() (*ResponseStatArticleAll, error) {
-	allTimeStat, errGetAllTime := s.Repo.GetStatArticleAllTime()
-	if errGetAllTime != nil {
-		return nil, ErrStatLoad
-	}
-	return allTimeStat, nil
 }
 func (s *ServiceStat) PushInStat() {
 	for {
