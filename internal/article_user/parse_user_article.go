@@ -3,40 +3,41 @@ package article_user
 import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/model"
-	"app/news-parser/pkg/generate_random"
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
+	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/google/uuid"
 )
 
 type CustomParse struct {
-	LinkUserCh    chan model.UserArticle
 	ArticleUserCh chan model.UserArticle
+	DBUserCh      chan model.UserArticle
+	RespUserCh    chan model.UserArticle
 	IsOkTextCh    chan bool
-	WG            *sync.WaitGroup
 	Repo          *RepositoryArticleUser
 }
 
-func NewCustomParsing(wg *sync.WaitGroup, repo *RepositoryArticleUser) *CustomParse {
+func NewCustomParsing(repo *RepositoryArticleUser) *CustomParse {
 	return &CustomParse{
-		LinkUserCh:    make(chan model.UserArticle, 10),
 		ArticleUserCh: make(chan model.UserArticle, 10),
+		DBUserCh:      make(chan model.UserArticle, 10),
+		RespUserCh:    make(chan model.UserArticle, 10),
 		IsOkTextCh:    make(chan bool, 10),
-		WG:            wg,
 		Repo:          repo,
 	}
 }
-func (cp *CustomParse) customParseCategory(url, category, uuid string, isText bool) {
+func (cp *CustomParse) customParseCategory(url, category, UserUUID string, isText bool) {
 	defer cp.recoveryCustomGoroutine()
 	response, errResp := http.Get(url)
 	if errResp != nil {
-		cp.LinkUserCh <- model.UserArticle{Error: errResp.Error()}
+		cp.RespUserCh <- model.UserArticle{Error: errResp.Error()}
+		return
 	}
 	defer func() {
 		if errClose := response.Body.Close(); errClose != nil {
@@ -45,30 +46,57 @@ func (cp *CustomParse) customParseCategory(url, category, uuid string, isText bo
 	}()
 	doc, errParse := goquery.NewDocumentFromReader(response.Body)
 	if errParse != nil {
-		cp.LinkUserCh <- model.UserArticle{Error: errParse.Error()}
+		cp.RespUserCh <- model.UserArticle{Error: errParse.Error()}
+		return
 	}
+	domain := getDomain(url)
 	doc.Find("a").Each(func(index int, element *goquery.Selection) {
 		var userArticle model.UserArticle
 		linkHeader := element.Text()
 		href, exists := element.Attr("href")
 		if linkHeader != "" && exists {
-			userArticle.IDArticle = uint(generate_random.GenerateNumbers(11))
-			userArticle.UUIDUser = uuid
+			if !strings.Contains(url, domain) {
+				userArticle.URL = domain + common.ParseString(href)
+			} else {
+				userArticle.URL = common.ParseString(href)
+			}
+			userArticle.ArticleUUID = uuid.New().String()
+			userArticle.UserUUID = UserUUID
 			userArticle.Category = category
-			userArticle.URL = common.ParseString(href)
 			userArticle.Header = common.ParseString(linkHeader)
-			cp.LinkUserCh <- userArticle
+
+			if isText {
+				cp.ArticleUserCh <- userArticle
+			} else {
+				cp.DBUserCh <- userArticle
+			}
 		}
 	})
-	cp.WG.Done()
-	if isText {
-		close(cp.LinkUserCh)
+	if !isText {
+		close(cp.DBUserCh)
 	}
 }
+func getDomain(url string) string {
+	counter := 0
+	domain := ""
+	for i := 0; i < len(url); i++ {
+		if url[i] == '/' {
+			counter++
+		}
+		if counter < 3 {
+			domain += string(url[i])
+		} else {
+			break
+		}
+	}
+	return domain
+}
+
 func (cp *CustomParse) CustomParseArticle() {
 	path, errLaunch := launcher.New().Headless(true).Launch()
 	if errLaunch != nil {
-		cp.ArticleUserCh <- model.UserArticle{Error: errLaunch.Error()}
+		cp.RespUserCh <- model.UserArticle{Error: errLaunch.Error()}
+		return
 	}
 	browser := rod.New().ControlURL(path).MustConnect()
 	defer func() {
@@ -77,16 +105,13 @@ func (cp *CustomParse) CustomParseArticle() {
 			log.Println(errClose)
 		}
 	}()
-	for art := range cp.LinkUserCh {
-		if art.Error != "" {
-			cp.ArticleUserCh <- art
-		}
+	for art := range cp.ArticleUserCh {
 		go func() {
 			page := browser.MustPage(art.URL)
 			page.Timeout(10 * time.Second).MustWaitLoad()
 			text, errElement := page.MustElement("body").Text()
 			if errElement != nil {
-				log.Println("проблема с парсингом страницы") //!!
+				log.Println("error parse page")
 				art.Text = "-"
 				cp.IsOkTextCh <- true
 			}
@@ -96,42 +121,32 @@ func (cp *CustomParse) CustomParseArticle() {
 		ticker := time.NewTicker(20 * time.Second)
 		select {
 		case <-ticker.C:
-			log.Println("время на запись текста истекло") //!!
+			log.Println("time for write down text expired") //!!
 			art.Text = "-"
-			cp.ArticleUserCh <- art
+			cp.DBUserCh <- art
 		case ok := <-cp.IsOkTextCh:
 			if ok {
-				cp.ArticleUserCh <- art
+				cp.DBUserCh <- art
 			}
 		}
 	}
-	cp.WG.Done()
+	close(cp.DBUserCh)
 }
-func (cp *CustomParse) createUserArticlesWithoutText() {
-	for userArticle := range cp.LinkUserCh {
+func (cp *CustomParse) createUserArticles() {
+	for userArticle := range cp.DBUserCh {
 		errCreate := cp.Repo.CreateUserNewArticle(&userArticle)
 		if errCreate != nil {
-			cp.LinkUserCh <- model.UserArticle{URL: userArticle.URL, Error: errCreate.Error()}
+			cp.RespUserCh <- model.UserArticle{URL: userArticle.URL, Error: errCreate.Error()}
 		}
-		cp.LinkUserCh <- userArticle
+		cp.RespUserCh <- userArticle
 	}
-	cp.WG.Done()
-	close(cp.LinkUserCh)
+	close(cp.RespUserCh)
 }
-func (cp *CustomParse) createUserArticlesWithText() {
-	for userArticle := range cp.ArticleUserCh {
-		errCreate := cp.Repo.CreateUserNewArticle(&userArticle)
-		if errCreate != nil {
-			cp.ArticleUserCh <- model.UserArticle{URL: userArticle.URL, Error: errCreate.Error()}
-		}
-		cp.ArticleUserCh <- userArticle
-	}
-	cp.WG.Done()
-	close(cp.ArticleUserCh)
-}
+
 func (cp *CustomParse) recoveryCustomGoroutine() {
 	if errPanic := recover(); errPanic != nil {
-		cp.ArticleUserCh <- model.UserArticle{Error: fmt.Sprint(errPanic)}
+		log.Println(errPanic)
+		cp.RespUserCh <- model.UserArticle{Error: fmt.Sprint(errPanic)}
 	}
 }
 func ParseText(url string) (string, error) {
@@ -152,5 +167,4 @@ func ParseText(url string) (string, error) {
 		return "", errElement
 	}
 	return text, nil
-
 }

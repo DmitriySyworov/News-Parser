@@ -101,7 +101,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 			CreatedAt: updateUser.CreatedAt,
 			Name:      updateUser.Name,
 			Email:     updateUser.Email,
-			UUIDUser:  updateUser.UUIDUser,
+			UUIDUser:  updateUser.UserUUID,
 		}, nil, nil
 	} else if body.NewEmail != "" {
 		token, errSecurity := s.helperSecurity(body.NewEmail, actionUpdate, body)
@@ -208,7 +208,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 				Name:     tempData.Name,
 				Email:    tempData.Email,
 				Password: tempData.Password,
-				UUIDUser: userUUID,
+				UserUUID: userUUID,
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
@@ -223,7 +223,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 				Name:     tempData.Name,
 				Email:    user.Email,
 				Password: tempData.Password,
-				UUIDUser: userUUID,
+				UserUUID: userUUID,
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
@@ -238,7 +238,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 				Name:     tempData.Name,
 				Email:    tempData.Email,
 				Password: user.Password,
-				UUIDUser: userUUID,
+				UserUUID: userUUID,
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
@@ -253,7 +253,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 				Name:     user.Name,
 				Email:    tempData.Email,
 				Password: tempData.Password,
-				UUIDUser: userUUID,
+				UserUUID: userUUID,
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {

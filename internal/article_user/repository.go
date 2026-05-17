@@ -20,7 +20,7 @@ func NewRepositoryArticleUser(postgres *open_Db.PostgresDb) *RepositoryArticleUs
 	}
 }
 func (r *RepositoryArticleUser) UpdateUserArticle(userUUID string, userArticle *model.UserArticle) error {
-	res := r.PostgresDb.Where("uuid_user = ?", userUUID).Updates(&userArticle)
+	res := r.PostgresDb.Where("user_uuid = ?", userUUID).Updates(&userArticle)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -31,7 +31,7 @@ func (r *RepositoryArticleUser) UpdateOneColumnUserArticle(userUUID string, data
 	res := r.PostgresDb.
 		Model(&model.UserArticle{}).
 		Clauses(clause.Returning{}).
-		Where("uuid_user = ?", userUUID).
+		Where("user_uuid = ?", userUUID).
 		Update(nameColumn, data).
 		Scan(&userArticle)
 	if res.Error != nil {
@@ -42,12 +42,12 @@ func (r *RepositoryArticleUser) UpdateOneColumnUserArticle(userUUID string, data
 func (r *RepositoryArticleUser) GetUserArticlesByDomain(userUUID string, domain string, flagWithText bool) ([]model.UserArticle, error) {
 	var sliceUserArticle []model.UserArticle
 	if flagWithText {
-		res := r.PostgresDb.Where("uuid_user = ? AND url LIKE %?% AND text IS NOT NULL OR text != '-'", userUUID, domain).First(&sliceUserArticle)
+		res := r.PostgresDb.Where("user_uuid = ? AND url LIKE %?% AND text IS NOT NULL OR text != '-'", userUUID, domain).First(&sliceUserArticle)
 		if res.Error != nil || len(sliceUserArticle) == 0 {
 			return nil, ErrNotFoundUserArticle
 		}
 	} else {
-		res := r.PostgresDb.Where("uuid_user = ? AND url LIKE %?% AND text IS NULL OR text = '-'", userUUID, domain).First(&sliceUserArticle)
+		res := r.PostgresDb.Where("user_uuid = ? AND url LIKE %?% AND text IS NULL OR text = '-'", userUUID, domain).First(&sliceUserArticle)
 		if res.Error != nil || len(sliceUserArticle) == 0 {
 			return nil, ErrNotFoundUserArticle
 		}
@@ -56,14 +56,14 @@ func (r *RepositoryArticleUser) GetUserArticlesByDomain(userUUID string, domain 
 }
 func (r *RepositoryArticleUser) GetUserArticle(userUUID string, idArticle uint) (*model.UserArticle, error) {
 	var userArticle model.UserArticle
-	res := r.PostgresDb.Where("uuid_user = ? AND id_article = ?", userUUID, idArticle).First(&userArticle)
+	res := r.PostgresDb.Where("user_uuid = ? AND article_uuid = ?", userUUID, idArticle).First(&userArticle)
 	if res.Error != nil {
 		return nil, res.Error
 	}
 	return &userArticle, nil
 }
 func (r *RepositoryArticleUser) DeleteAllUserArticle(uuidUser string) error {
-	res := r.PostgresDb.Where("uuid_user = ?", uuidUser).Delete(&model.UserArticle{})
+	res := r.PostgresDb.Where("user_uuid = ?", uuidUser).Delete(&model.UserArticle{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -73,8 +73,8 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category
 	var sliceUserArticle []model.UserArticle
 	if category == "" {
 		res := r.PostgresDb.
-			Raw(`SELECT created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
-                    WHERE uuid_user = ?
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, category, article_uuid, user_uuid FROM user_articles
+                    WHERE user_uuid = ?
 					OFFSET ?
 					LIMIT ?
 `, userUUID, offset, limit).
@@ -84,8 +84,8 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category
 		}
 	} else {
 		res := r.PostgresDb.
-			Raw(`SELECT created_at, updated_at, deleted_at, header, url, category, id_article, uuid_user FROM user_articles
-                    WHERE uuid_user = ? AND category = ?
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, category, article_uuid, user_uuid FROM user_articles
+                    WHERE user_uuid = ? AND category = ?
 					OFFSET ?
 					LIMIT ?
 `, userUUID, category, offset, limit).
@@ -105,8 +105,8 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category st
 	var sliceUserArticle []model.UserArticle
 	if category == "" {
 		res := r.PostgresDb.
-			Raw(`SELECT created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
-                    WHERE uuid_user = ?
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, text, category, article_uuid, user_uuid FROM user_articles
+                    WHERE user_uuid = ?
 					OFFSET ?
 					LIMIT ?
 `, userUUID, offset, limit).
@@ -116,8 +116,8 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category st
 		}
 	} else {
 		res := r.PostgresDb.
-			Raw(`SELECT created_at, updated_at, deleted_at, header, url, text, category, id_article, uuid_user FROM user_articles
-                    WHERE  uuid_user = ? AND category = ?
+			Raw(`SELECT created_at, updated_at, deleted_at, header, url, text, category, article_uuid, user_uuid FROM user_articles
+                    WHERE  user_uuid = ? AND category = ?
 					OFFSET ?
 					LIMIT ?
 `, userUUID, category, offset, limit).
@@ -134,7 +134,7 @@ func (r *RepositoryArticleUser) GetAllUserArticlesWithText(userUUID, category st
 	}, nil
 }
 func (r *RepositoryArticleUser) RemoveUserArticleByID(userUUID string, idArticle uint) error {
-	res := r.PostgresDb.Where("uuid_user = ? AND id_article = ?", userUUID, idArticle).Delete(&model.UserArticle{})
+	res := r.PostgresDb.Where("user_uuid = ? AND article_uuid = ?", userUUID, idArticle).Delete(&model.UserArticle{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -170,7 +170,7 @@ type idArticlesSlice struct {
 
 func (r *RepositoryArticleUser) deleteUserArticles() {
 	var sliceIdArticles []idArticlesSlice
-	res := r.PostgresDb.Raw(`SELECT id_article, deleted_at FROM user_articles
+	res := r.PostgresDb.Raw(`SELECT article_uuid, deleted_at FROM user_articles
 							  WHERE deleted_at IS NOT NULL`).
 		Scan(&sliceIdArticles)
 	if res.Error != nil {
@@ -179,7 +179,7 @@ func (r *RepositoryArticleUser) deleteUserArticles() {
 	now := time.Now().Unix()
 	for _, articles := range sliceIdArticles {
 		if now-articles.DeletedAt.Unix()-common.UnixMonth > 0 {
-			r.PostgresDb.Unscoped().Where("id_article = ?", articles.IdArticle).Delete(&model.UserArticle{})
+			r.PostgresDb.Unscoped().Where("article_uuid = ?", articles.IdArticle).Delete(&model.UserArticle{})
 		}
 	}
 }
@@ -189,7 +189,7 @@ func (r *RepositoryArticleUser) RecoveryUserArticle(userUUID string, idArticle i
 		Model(&model.UserArticle{}).
 		Unscoped().
 		Clauses(clause.Returning{}).
-		Where("uuid_user = ? AND id_article = ? AND deleted_at IS NOT NULL", userUUID, idArticle).
+		Where("user_uuid = ? AND article_uuid = ? AND deleted_at IS NOT NULL", userUUID, idArticle).
 		Update("deleted_at", nil).
 		Scan(&userArticle)
 	if res.Error != nil {
@@ -203,7 +203,7 @@ func (r *RepositoryArticleUser) RecoveryAllUserArticle(userUUID string) ([]model
 		Model(&model.UserArticle{}).
 		Unscoped().
 		Clauses(clause.Returning{}).
-		Where("uuid_user = ? AND deleted_at IS NOT NULL", userUUID).
+		Where("user_uuid = ? AND deleted_at IS NOT NULL", userUUID).
 		Update("deleted_at", nil).
 		Scan(&sliceUserArticle)
 	if res.Error != nil {

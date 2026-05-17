@@ -69,7 +69,7 @@ func (s *ServiceAuth) Login(body *RequestLogin) (*ResponseConfirm, *custom_error
 		}
 	}
 	j := JWT.NewJWT(s.Signature)
-	token, errJWT := j.CreateJWT(user.UUIDUser)
+	token, errJWT := j.CreateJWT(user.UserUUID)
 	if errJWT != nil {
 		return nil, &custom_errors.Error{
 			Message: custom_errors.ErrFailedSecurity.Error(),
@@ -196,7 +196,7 @@ func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseCon
 			Name:     tempUser.Name,
 			Email:    tempUser.Email,
 			Password: tempUser.Password,
-			UUIDUser: uuId,
+			UserUUID: uuId,
 		}
 		if errCreate := s.IRepoUser.CreateUser(user); errCreate != nil {
 			return nil, &custom_errors.Error{
@@ -213,14 +213,14 @@ func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseCon
 				Status:  http.StatusNotFound,
 			}
 		}
-		errRecovery := s.IRepoUser.RecoveryUser(user.UUIDUser)
+		errRecovery := s.IRepoUser.RecoveryUser(user.UserUUID)
 		if errRecovery != nil {
 			return nil, &custom_errors.Error{
 				Message: ErrFailedRecovery.Error(),
 				Status:  http.StatusInternalServerError,
 			}
 		}
-		UUID = user.UUIDUser
+		UUID = user.UserUUID
 	case actionRecoveryPassword:
 		user, errGetByEmail := s.IRepoUser.GetUserByEmail(tempUser.Email)
 		if errGetByEmail != nil {
@@ -229,14 +229,14 @@ func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseCon
 				Status:  http.StatusNotFound,
 			}
 		}
-		_, errUpdate := s.IRepoUser.UpdateMyUserOneColumn(user.UUIDUser, "password", tempUser.Password)
+		_, errUpdate := s.IRepoUser.UpdateMyUserOneColumn(user.UserUUID, "password", tempUser.Password)
 		if errUpdate != nil {
 			return nil, &custom_errors.Error{
 				Message: ErrFailedChangePassword.Error(),
 				Status:  http.StatusUnauthorized,
 			}
 		}
-		UUID = user.UUIDUser
+		UUID = user.UserUUID
 	default:
 		return nil, &custom_errors.Error{
 			Message: ErrIncorrectActionConfirm.Error(),

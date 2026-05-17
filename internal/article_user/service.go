@@ -5,10 +5,8 @@ import (
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
 	"app/news-parser/internal/model"
-	"fmt"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -49,24 +47,18 @@ func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, uuid
 		return nil, sliceError
 	}
 	var sliceUserArticle []model.UserArticle
-	var wg sync.WaitGroup
-	customParsing := NewCustomParsing(&wg, s.Repo)
+	customParsing := NewCustomParsing(s.Repo)
 	if isAddText {
-		wg.Add(3)
 		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
 		go customParsing.CustomParseArticle()
-		go customParsing.createUserArticlesWithText()
-		defer wg.Wait()
-		for customLink := range customParsing.LinkUserCh {
+		go customParsing.createUserArticles()
+		for customLink := range customParsing.ArticleUserCh {
 			sliceUserArticle = append(sliceUserArticle, customLink)
 		}
 	} else {
-		wg.Add(2)
 		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
-		go customParsing.createUserArticlesWithoutText()
-		defer wg.Wait()
-		for customArticle := range customParsing.ArticleUserCh {
-			fmt.Println(customArticle)
+		go customParsing.createUserArticles()
+		for customArticle := range customParsing.RespUserCh {
 			sliceUserArticle = append(sliceUserArticle, customArticle)
 		}
 	}
@@ -108,12 +100,12 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, idArticleStr,
 			return nil, sliceError
 		}
 		resUserArticle := model.UserArticle{
-			Header:    userArticle.Header,
-			URL:       userArticle.URL,
-			Text:      text,
-			Category:  category,
-			IDArticle: userArticle.IDArticle,
-			UUIDUser:  userArticle.UUIDUser,
+			Header:      userArticle.Header,
+			URL:         userArticle.URL,
+			Text:        text,
+			Category:    category,
+			ArticleUUID: userArticle.ArticleUUID,
+			UserUUID:    userArticle.UserUUID,
 		}
 		errUpdateCategory := s.Repo.UpdateUserArticle(userUUID, &resUserArticle)
 		if errUpdateCategory != nil {
@@ -126,12 +118,12 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, idArticleStr,
 		return &resUserArticle, nil
 	} else if category != "" && addText && !deleteText {
 		resUserArticle := model.UserArticle{
-			Header:    userArticle.Header,
-			URL:       userArticle.URL,
-			Text:      "-",
-			Category:  category,
-			IDArticle: userArticle.IDArticle,
-			UUIDUser:  userArticle.UUIDUser,
+			Header:      userArticle.Header,
+			URL:         userArticle.URL,
+			Text:        "-",
+			Category:    category,
+			ArticleUUID: userArticle.ArticleUUID,
+			UserUUID:    userArticle.UserUUID,
 		}
 		errUpdateCategory := s.Repo.UpdateUserArticle(userUUID, &resUserArticle)
 		if errUpdateCategory != nil {

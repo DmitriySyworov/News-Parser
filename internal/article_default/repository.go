@@ -131,7 +131,7 @@ func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error)
 				Header:    mapValue[fieldHeader],
 				URL:       mapValue[fieldUrl],
 				Text:      mapValue[fieldText],
-				IDArticle: uint(id),
+				ArticleID: uint(id),
 			}, nil
 		}
 	}
@@ -196,12 +196,12 @@ func (r *RepositoryArticle) allArticlesRedis() ([]model.ArticleArchive, error) {
 					log.Println(errHGetAll)
 				}
 				sliceArticles = append(sliceArticles, model.ArticleArchive{
-					Header:      mapValue[fieldHeader],
-					URL:         mapValue[fieldUrl],
-					Text:        mapValue[fieldText],
-					Category:    category,
-					Date:        common.DateNow(),
-					UUIDArticle: uuid.New().String(),
+					Header:             mapValue[fieldHeader],
+					URL:                mapValue[fieldUrl],
+					Text:               mapValue[fieldText],
+					Category:           category,
+					Date:               common.DateNow(),
+					ArticleArchiveUUID: uuid.New().String(),
 				})
 			}
 		}

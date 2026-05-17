@@ -148,7 +148,7 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	var respCategoryArch []ResponseCategoryArchive //!!!!!
 	for _, arch := range archiveArticles {
 		var tempArch ResponseCategoryArchive
-		tempArch.UUIDArticle = arch.UUIDArticle
+		tempArch.UUIDArticle = arch.ArticleArchiveUUID
 		tempArch.URL = arch.URL
 		tempArch.Header = arch.Header
 		respCategoryArch = append(respCategoryArch, tempArch)
