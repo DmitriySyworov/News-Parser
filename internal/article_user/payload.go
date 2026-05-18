@@ -3,39 +3,51 @@ package article_user
 import (
 	"app/news-parser/internal/model"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type RequestCreateArticle struct {
 	URL      string `validate:"required,url"`
-	Category string `validate:"required"`
+	Category string `validate:"required,min=2,max=20"`
 }
 type RequestUpdateArticle struct {
-	Category string
+	Category string `validate:"omitempty,min=2,max=20"`
 }
 type RequestUpdateBatchArticles struct {
-	Domain string `validate:"required"`
+	Category string `validate:"omitempty,min=2,max=20"`
+	Domain   string `validate:"required"`
 }
 type ResponseSliceUserArticles struct {
 	SliceUserArticles []model.UserArticle `json:"user-articles"`
-	Error             string
 }
 type ResponseUserArticle struct {
-	Article model.UserArticle
+	Article          model.UserArticle
+	Status           int
+	SuccessOperation SuccessOfTheOperation `json:"success-of-the-operation"`
+}
+type ResponseCreateUserArticle struct {
+	Header           string
+	URL              string
+	Text             string
+	Category         string
+	ArticleUUID      string
+	UserUUID         string
+	SuccessOperation SuccessOfTheOperation `json:"success-of-the-operation"`
+}
+type SuccessOfTheOperation struct {
+	Success bool
+	Message string
 	Status  int
-	Error   string
 }
 type ResponseRemoveUserArticles struct {
 	SliceRemoveUserArticles []RemoveUserArticle `json:"remove-user-articles"`
 }
 type RemoveUserArticle struct {
-	*gorm.Model
-	ExpiredAt time.Time
-	Header    string
-	URL       string
-	Text      string
-	Category  string
-	IDArticle uint
-	UUIDUser  string
+	*model.BaseModel
+	ExpiredAt   time.Time
+	Header      string
+	URL         string
+	Text        string
+	Category    string
+	ArticleUUID string
+	UserUUID    string
 }

@@ -101,7 +101,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 			CreatedAt: updateUser.CreatedAt,
 			Name:      updateUser.Name,
 			Email:     updateUser.Email,
-			UUIDUser:  updateUser.UserUUID,
+			UserUUID:  updateUser.UserUUID,
 		}, nil, nil
 	} else if body.NewEmail != "" {
 		token, errSecurity := s.helperSecurity(body.NewEmail, actionUpdate, body)

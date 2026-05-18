@@ -15,11 +15,10 @@ type ArticleArchive struct {
 	Header             string `gorm:"not null"`
 	URL                string `gorm:"unique;not null"`
 	Text               string
-	Category           string    `gorm:"not null"`
+	Category           string    `gorm:"type:varchar(20);not null"`
 	Date               time.Time `gorm:"type:date;not null"`
 	ArticleArchiveUUID string    `gorm:"type:char(36);unique;not null"`
 	IsArticle          bool
-	Error              string `gorm:"-"`
 }
 type User struct {
 	*BaseModel
@@ -35,13 +34,12 @@ type UserArticle struct {
 	Header      string
 	URL         string
 	Text        string
-	Category    string
+	Category    string `gorm:"type:varchar(20)"`
 	ArticleUUID string `gorm:"type:char(36);unique;not null"`
 	UserUUID    string `gorm:"type:char(36)"`
-	Error       string `gorm:"-"`
 }
 type CategoryStat struct {
-	Category string    `gorm:"not null"`
+	Category string    `gorm:"type:varchar(20);not null"`
 	Click    uint      `gorm:"type:int"`
 	Date     time.Time `gorm:"type:date;not null"`
 }
@@ -63,5 +61,4 @@ type ArticleToday struct {
 	Text      string
 	Category  string
 	ArticleID uint
-	Error     string
 }

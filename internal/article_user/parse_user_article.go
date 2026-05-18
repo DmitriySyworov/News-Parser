@@ -2,8 +2,8 @@ package article_user
 
 import (
 	"app/news-parser/internal/common"
+	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/model"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -18,7 +18,7 @@ import (
 type CustomParse struct {
 	ArticleUserCh chan model.UserArticle
 	DBUserCh      chan model.UserArticle
-	RespUserCh    chan model.UserArticle
+	RespUserCh    chan ResponseCreateUserArticle
 	IsOkTextCh    chan bool
 	Repo          *RepositoryArticleUser
 }
@@ -27,7 +27,7 @@ func NewCustomParsing(repo *RepositoryArticleUser) *CustomParse {
 	return &CustomParse{
 		ArticleUserCh: make(chan model.UserArticle, 10),
 		DBUserCh:      make(chan model.UserArticle, 10),
-		RespUserCh:    make(chan model.UserArticle, 10),
+		RespUserCh:    make(chan ResponseCreateUserArticle, 10),
 		IsOkTextCh:    make(chan bool, 10),
 		Repo:          repo,
 	}
@@ -36,7 +36,11 @@ func (cp *CustomParse) customParseCategory(url, category, UserUUID string, isTex
 	defer cp.recoveryCustomGoroutine()
 	response, errResp := http.Get(url)
 	if errResp != nil {
-		cp.RespUserCh <- model.UserArticle{Error: errResp.Error()}
+		cp.RespUserCh <- ResponseCreateUserArticle{SuccessOperation: SuccessOfTheOperation{
+			Success: false,
+			Message: ErrUserURL.Error(),
+			Status:  http.StatusNotFound,
+		}}
 		return
 	}
 	defer func() {
@@ -46,7 +50,11 @@ func (cp *CustomParse) customParseCategory(url, category, UserUUID string, isTex
 	}()
 	doc, errParse := goquery.NewDocumentFromReader(response.Body)
 	if errParse != nil {
-		cp.RespUserCh <- model.UserArticle{Error: errParse.Error()}
+		cp.RespUserCh <- ResponseCreateUserArticle{SuccessOperation: SuccessOfTheOperation{
+			Success: false,
+			Message: ErrFailedParseBody.Error(),
+			Status:  http.StatusNotFound,
+		}}
 		return
 	}
 	domain := getDomain(url)
@@ -55,7 +63,7 @@ func (cp *CustomParse) customParseCategory(url, category, UserUUID string, isTex
 		linkHeader := element.Text()
 		href, exists := element.Attr("href")
 		if linkHeader != "" && exists {
-			if !strings.Contains(url, domain) {
+			if !strings.Contains(href, domain) {
 				userArticle.URL = domain + common.ParseString(href)
 			} else {
 				userArticle.URL = common.ParseString(href)
@@ -95,7 +103,7 @@ func getDomain(url string) string {
 func (cp *CustomParse) CustomParseArticle() {
 	path, errLaunch := launcher.New().Headless(true).Launch()
 	if errLaunch != nil {
-		cp.RespUserCh <- model.UserArticle{Error: errLaunch.Error()}
+		//cp.RespUserCh <- model.UserArticle{Error: errLaunch.Error()}
 		return
 	}
 	browser := rod.New().ControlURL(path).MustConnect()
@@ -136,9 +144,25 @@ func (cp *CustomParse) createUserArticles() {
 	for userArticle := range cp.DBUserCh {
 		errCreate := cp.Repo.CreateUserNewArticle(&userArticle)
 		if errCreate != nil {
-			cp.RespUserCh <- model.UserArticle{URL: userArticle.URL, Error: errCreate.Error()}
+			cp.RespUserCh <- ResponseCreateUserArticle{SuccessOperation: SuccessOfTheOperation{
+				Success: false,
+				Message: ErrSaveParseData.Error(),
+				Status:  http.StatusInternalServerError,
+			}}
+			return
 		}
-		cp.RespUserCh <- userArticle
+		cp.RespUserCh <- ResponseCreateUserArticle{
+			Header:      userArticle.Header,
+			URL:         userArticle.URL,
+			Text:        userArticle.Text,
+			Category:    userArticle.Category,
+			ArticleUUID: userArticle.ArticleUUID,
+			UserUUID:    userArticle.UserUUID,
+			SuccessOperation: SuccessOfTheOperation{
+				Success: true,
+				Message: "Created",
+				Status:  http.StatusCreated,
+			}}
 	}
 	close(cp.RespUserCh)
 }
@@ -146,7 +170,11 @@ func (cp *CustomParse) createUserArticles() {
 func (cp *CustomParse) recoveryCustomGoroutine() {
 	if errPanic := recover(); errPanic != nil {
 		log.Println(errPanic)
-		cp.RespUserCh <- model.UserArticle{Error: fmt.Sprint(errPanic)}
+		cp.RespUserCh <- ResponseCreateUserArticle{SuccessOperation: SuccessOfTheOperation{
+			Success: false,
+			Message: custom_errors.ErrCriticalServer.Error(),
+			Status:  http.StatusInternalServerError,
+		}}
 	}
 }
 func ParseText(url string) (string, error) {
