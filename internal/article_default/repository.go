@@ -42,7 +42,7 @@ func (r *RepositoryArticle) GetArticlesInCategoryToday(category string, offset, 
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
 	keyZ := "Z:" + category + ":" + fmt.Sprint(filter)
-	keysArticle, errZRange := r.RedisDb.ZRange(rdbContext, keyZ, int64(offset), int64(limit)).Result()
+	keysArticle, errZRange := r.RedisDb.ZRange(rdbContext, keyZ, int64(offset), int64(offset+limit-1)).Result()
 	if errZRange != nil {
 		return nil, errZRange
 	}
@@ -131,7 +131,7 @@ func (r *RepositoryArticle) GetArticleToday(id int) (*model.ArticleToday, error)
 				Header:    mapValue[fieldHeader],
 				URL:       mapValue[fieldUrl],
 				Text:      mapValue[fieldText],
-				IDArticle: uint(id),
+				ArticleID: uint(id),
 			}, nil
 		}
 	}
@@ -196,12 +196,12 @@ func (r *RepositoryArticle) allArticlesRedis() ([]model.ArticleArchive, error) {
 					log.Println(errHGetAll)
 				}
 				sliceArticles = append(sliceArticles, model.ArticleArchive{
-					Header:      mapValue[fieldHeader],
-					URL:         mapValue[fieldUrl],
-					Text:        mapValue[fieldText],
-					Category:    category,
-					Date:        common.DateNow(),
-					UUIDArticle: uuid.New().String(),
+					Header:             mapValue[fieldHeader],
+					URL:                mapValue[fieldUrl],
+					Text:               mapValue[fieldText],
+					Category:           category,
+					Date:               common.DateNow(),
+					ArticleArchiveUUID: uuid.New().String(),
 				})
 			}
 		}
@@ -229,7 +229,7 @@ func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
 		if errHSet != nil {
 			return errHSet
 		}
-		errExp := r.RedisDb.Expire(rdbContext, keyArticle, 24*time.Hour).Err()
+		errExp := r.RedisDb.Expire(rdbContext, keyArticle, common.Day).Err()
 		if errExp != nil {
 			return errExp
 		}
@@ -245,6 +245,10 @@ func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
 				Member: keyArticle,
 				Score:  float64(len(ZCategory) + 1),
 			})
+		}
+		errExpire := r.Expire(rdbContext, keyZ, common.Day).Err()
+		if errExpire != nil {
+			return errExpire
 		}
 		return nil
 	})

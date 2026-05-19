@@ -9,6 +9,7 @@ import (
 	"app/news-parser/pkg/generate_random"
 	"app/news-parser/pkg/handler_request"
 	"net/http"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -100,7 +101,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 			CreatedAt: updateUser.CreatedAt,
 			Name:      updateUser.Name,
 			Email:     updateUser.Email,
-			UUIDUser:  updateUser.UUIDUser,
+			UserUUID:  updateUser.UserUUID,
 		}, nil, nil
 	} else if body.NewEmail != "" {
 		token, errSecurity := s.helperSecurity(body.NewEmail, actionUpdate, body)
@@ -159,14 +160,14 @@ func (s *ServiceUser) helperSecurity(email, action string, bodyUpdate *RequestUp
 		}
 		return token, nil
 	}
-	return "", custom_errors.ErrIncorrectAction
+	return "", ErrIncorrectAction
 }
 func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uint) (*model.User, *custom_errors.Error) {
 	user, errGetUser := s.Repo.GetUserByUUID(userUUID)
 	if errGetUser != nil {
 		return nil, &custom_errors.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
-			Status:  http.StatusInternalServerError,
+			Status:  http.StatusNotFound,
 		}
 	}
 	tempData, errGetSession := s.Repo.GetSession(sessionID, action)
@@ -207,7 +208,37 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 				Name:     tempData.Name,
 				Email:    tempData.Email,
 				Password: tempData.Password,
-				UUIDUser: userUUID,
+				UserUUID: userUUID,
+			}
+			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
+			if errUpdate != nil {
+				return nil, &custom_errors.Error{
+					Message: ErrUpdateUser.Error(),
+					Status:  http.StatusInternalServerError,
+				}
+			}
+			return &resUser, nil
+		} else if tempData.Name != "" && tempData.Email == "" && tempData.Password != "" {
+			resUser := model.User{
+				Name:     tempData.Name,
+				Email:    user.Email,
+				Password: tempData.Password,
+				UserUUID: userUUID,
+			}
+			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
+			if errUpdate != nil {
+				return nil, &custom_errors.Error{
+					Message: ErrUpdateUser.Error(),
+					Status:  http.StatusInternalServerError,
+				}
+			}
+			return &resUser, nil
+		} else if tempData.Name != "" && tempData.Email != "" && tempData.Password == "" {
+			resUser := model.User{
+				Name:     tempData.Name,
+				Email:    tempData.Email,
+				Password: user.Password,
+				UserUUID: userUUID,
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
@@ -222,7 +253,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 				Name:     user.Name,
 				Email:    tempData.Email,
 				Password: tempData.Password,
-				UUIDUser: userUUID,
+				UserUUID: userUUID,
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
@@ -251,14 +282,22 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 			}
 			return resUser, nil
 		}
-		return nil, &custom_errors.Error{
-			Message: handler_request.ErrInvalidData.Error(),
-			Status:  http.StatusBadRequest,
-		}
 	default:
 		return nil, &custom_errors.Error{
 			Message: ErrIncorrectAction.Error(),
 			Status:  http.StatusBadRequest,
 		}
+	}
+	return nil, &custom_errors.Error{
+		Message: handler_request.ErrInvalidData.Error(),
+		Status:  http.StatusBadRequest,
+	}
+}
+func (s *ServiceUser) DeletingRemoveUser() {
+	ticker := time.NewTicker(time.Hour * 24)
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+		s.Repo.deleteExpiredUser()
 	}
 }

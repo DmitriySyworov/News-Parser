@@ -21,12 +21,14 @@ func helperValidateToken(header string) (string, error) {
 }
 
 const (
-	KeySessionJWT = "keySessionJWT"
-	KeyAuthToken  = "keyAuthToken"
+	KeyContext = "keyContext"
 )
 
 func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		defer func() {
+			m.respError = custom_errors.ResponseError{}
+		}()
 		header := request.Header.Get("X-Temp-Token")
 		token, errToken := helperValidateToken(header)
 		if errToken != nil {
@@ -47,13 +49,20 @@ func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 			handler_response.HandlerResponse(writer, m.respError, http.StatusUnauthorized)
 			return
 		}
-		valueCtx := context.WithValue(context.Background(), KeySessionJWT, sessionId)
+		if tokens, ok := request.Context().Value(KeyContext).(ContextToken); ok && tokens.UUID != "" {
+			m.ContextToken.UUID = tokens.UUID
+		}
+		m.ContextToken.SessionID = sessionId
+		valueCtx := context.WithValue(context.Background(), KeyContext, m.ContextToken)
 		requestCTX := request.WithContext(valueCtx)
 		next.ServeHTTP(writer, requestCTX)
 	})
 }
 func (m *ManagerMiddleware) IsAuthJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		defer func() {
+			m.respError = custom_errors.ResponseError{}
+		}()
 		header := request.Header.Get("Authorization")
 		token, errToken := helperValidateToken(header)
 		if errToken != nil {
@@ -66,6 +75,7 @@ func (m *ManagerMiddleware) IsAuthJWT(next http.Handler) http.Handler {
 		}
 		j := JWT.NewJWT(m.Signature)
 		UUID, errParseJwt := j.ParseJWT(token)
+
 		if errParseJwt != nil {
 			m.respError.Errors = append(m.respError.Errors, custom_errors.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
@@ -74,7 +84,11 @@ func (m *ManagerMiddleware) IsAuthJWT(next http.Handler) http.Handler {
 			handler_response.HandlerResponse(writer, m.respError, http.StatusUnauthorized)
 			return
 		}
-		valueCtx := context.WithValue(context.Background(), KeyAuthToken, UUID)
+		if tokens, ok := request.Context().Value(KeyContext).(ContextToken); ok && tokens.SessionID != "" {
+			m.ContextToken.SessionID = tokens.SessionID
+		}
+		m.ContextToken.UUID = UUID
+		valueCtx := context.WithValue(context.Background(), KeyContext, m.ContextToken)
 		requestCTX := request.WithContext(valueCtx)
 		next.ServeHTTP(writer, requestCTX)
 	})

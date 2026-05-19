@@ -6,8 +6,8 @@ import (
 )
 
 func HandlerResponse(writer http.ResponseWriter, v any, status int) {
-	writer.WriteHeader(status)
 	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(status)
 	errEncode := json.NewEncoder(writer).Encode(v)
 	if errEncode != nil {
 		panic(errEncode)

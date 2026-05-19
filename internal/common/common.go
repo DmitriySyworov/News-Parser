@@ -25,6 +25,8 @@ const (
 
 	RdbTimeout = time.Second * 10
 
+	Day = time.Hour * 24
+
 	UnixMonth = 2592000
 
 	LengthTempCode = 6
@@ -64,6 +66,12 @@ func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_erro
 	} else {
 		offset = OffsetDefault
 	}
+	if offset < 0 {
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: custom_errors.ErrNegativeOffset.Error(),
+			Status:  http.StatusBadRequest,
+		})
+	}
 	if limitStr != "" {
 		limit, errParseLimit = strconv.Atoi(limitStr)
 		if errParseLimit != nil {
@@ -74,6 +82,12 @@ func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_erro
 		}
 	} else {
 		limit = LimitDefault
+	}
+	if limit < 0 {
+		sliceError = append(sliceError, custom_errors.Error{
+			Message: custom_errors.ErrNegativeLimit.Error(),
+			Status:  http.StatusBadRequest,
+		})
 	}
 	if len(sliceError) != 0 {
 		return 0, 0, sliceError
@@ -89,12 +103,12 @@ func ParseString(str string) string {
 	return resStr
 }
 
+type RequestConfirm struct {
+	Code uint `json:"code" validate:"required"`
+}
 type ResponseAuth struct {
 	Message string `json:"message"`
 	JWTTemp string `json:"jwt-temp"`
-}
-type RequestConfirm struct {
-	Code uint `json:"code" validate:"required"`
 }
 
 func SendEmailLetter(userEmail string, tempCode uint, conf *configs.Configs) error {
@@ -105,6 +119,9 @@ func SendEmailLetter(userEmail string, tempCode uint, conf *configs.Configs) err
 	case <-after:
 		return custom_errors.ErrSendLetter
 	case errSend := <-letter.ChErr:
-		return errSend
+		if errSend != nil {
+			return errSend
+		}
+		return nil
 	}
 }

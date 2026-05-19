@@ -6,6 +6,7 @@ import (
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/open_Db"
 	"context"
+	"log"
 	"strconv"
 	"time"
 
@@ -25,14 +26,28 @@ func NewRepositoryUser(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) *Re
 }
 func (r *RepositoryUser) IsUserExistByNameAndEmail(name, email string) error {
 	resName := r.PostgresDb.Where("name = ?", name).First(&model.User{})
+	if resName == nil {
+		return custom_errors.ErrUserExist
+	}
 	resEmail := r.PostgresDb.Where("email = ?", email).First(&model.User{})
-	if resName.Error == nil || resEmail.Error == nil {
+	if resEmail.Error == nil {
 		return custom_errors.ErrUserExist
 	}
 	return nil
 }
+func (r *RepositoryUser) GetRemoveUserByEmail(email string) (*model.User, error) {
+	var user model.User
+	res := r.PostgresDb.
+		Unscoped().
+		Where("email = ? AND deleted_at IS NOT NULL", email).
+		First(&user)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &user, nil
+}
 func (r *RepositoryUser) IsUserExistByUUID(uuid string) bool {
-	res := r.PostgresDb.Where("uuid_user = ?", uuid).First(&model.User{})
+	res := r.PostgresDb.Where("user_uuid = ?", uuid).First(&model.User{})
 	if res.Error != nil {
 		return false
 	}
@@ -54,7 +69,7 @@ func (r *RepositoryUser) GetUserByEmail(email string) (*model.User, error) {
 }
 func (r *RepositoryUser) GetUserByUUID(uuid string) (*model.User, error) {
 	var user model.User
-	res := r.PostgresDb.Where("uuid_user = ?", uuid).First(&user)
+	res := r.PostgresDb.Where("user_uuid = ?", uuid).First(&user)
 	if res.Error != nil {
 		return nil, res.Error
 	}
@@ -64,19 +79,18 @@ func (r *RepositoryUser) GetMyUser(uuid string) (*ResponseUser, error) {
 	var getUser ResponseUser
 	res := r.PostgresDb.
 		Model(&model.User{}).
-		Raw(`SELECT created_at, name, email, uuid_user FROM users
-				  WHERE uuid_user = ?`, uuid).
+		Raw(`SELECT created_at, name, email, user_uuid FROM users
+				  WHERE user_uuid = ?`, uuid).
 		First(&getUser)
 	if res.Error != nil {
 		return nil, res.Error
 	}
 	return &getUser, nil
 }
-
 func (r *RepositoryUser) UpdateMyUserOneColumn(userUUID, columnName, value string) (*model.User, error) {
 	var user model.User
 	res := r.PostgresDb.Model(&model.User{}).
-		Where("uuid_user = ?", userUUID).
+		Where("user_uuid = ?", userUUID).
 		Update(columnName, value).
 		First(&user)
 	if res.Error != nil {
@@ -84,8 +98,18 @@ func (r *RepositoryUser) UpdateMyUserOneColumn(userUUID, columnName, value strin
 	}
 	return &user, nil
 }
+func (r *RepositoryUser) RecoveryUser(userUUID string) error {
+	res := r.PostgresDb.Model(&model.User{}).
+		Unscoped().
+		Where("user_uuid = ?", userUUID).
+		Update("deleted_at", nil)
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
+}
 func (r *RepositoryUser) UpdateMyUserFull(user *model.User) error {
-	res := r.PostgresDb.Where("uuid_user = ?", user.UUIDUser).Updates(&user)
+	res := r.PostgresDb.Where("user_uuid = ?", user.UserUUID).Updates(&user)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -174,4 +198,28 @@ func (r *RepositoryUser) DeleteMyUser(userUUID string) error {
 		return res.Error
 	}
 	return nil
+}
+
+type deleteUsersDTO struct {
+	UUIDUser  string
+	DeletedAt time.Time
+}
+
+func (r *RepositoryUser) deleteExpiredUser() {
+	var sliceUser []deleteUsersDTO
+	res := r.PostgresDb.Raw(`SELECT uuid_user, deleted_at FROM users
+							  WHERE deleted_at IS NOT NULL`).
+		Scan(&sliceUser)
+	if res.Error != nil {
+		log.Println(res.Error)
+	}
+	now := time.Now().Unix()
+	for _, user := range sliceUser {
+		if now-user.DeletedAt.Unix()-common.UnixMonth > 0 {
+			r.PostgresDb.
+				Unscoped().
+				Where("uuid_user = ?", user.UUIDUser).
+				Delete(&model.User{})
+		}
+	}
 }
