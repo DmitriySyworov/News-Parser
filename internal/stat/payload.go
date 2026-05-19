@@ -6,11 +6,9 @@ import (
 
 type ResponseStatCategoryDate struct {
 	Categories []CategoryDbDate
-	Error      string
 }
 type ResponseStatCategoryAll struct {
 	Categories []CategoryDbAll
-	Error      string
 }
 type CategoryDbDate struct {
 	Category string
@@ -25,11 +23,9 @@ type CategoryDbAll struct {
 }
 type ResponseStatArticleDate struct {
 	Articles []ArticleDbDate
-	Error    string
 }
 type ResponseStatArticleAll struct {
 	Articles []ArticleDbAll
-	Error    string
 }
 type ArticleDbDate struct {
 	URL   string
