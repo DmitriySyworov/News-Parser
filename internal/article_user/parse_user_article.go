@@ -4,6 +4,7 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/model"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -178,21 +179,35 @@ func (cp *CustomParse) recoveryCustomGoroutine() {
 	}
 }
 func ParseText(url string) (string, error) {
-	path, errLaunch := launcher.New().Headless(true).Launch()
-	if errLaunch != nil {
-		return "", errLaunch
-	}
-	browser := rod.New().ControlURL(path).MustConnect()
 	defer func() {
-		if errClose := browser.Close(); errClose != nil {
-			log.Println(errClose)
+		if errPanic := recover(); errPanic != nil {
+			log.Println(errPanic)
+			return
 		}
 	}()
-	page := browser.MustPage(url)
-	page.Timeout(10 * time.Second).MustWaitLoad()
-	text, errElement := page.MustElement("body").Text()
-	if errElement != nil {
-		return "", errElement
+	after := time.After(time.Second * 10)
+	for {
+		select {
+		case <-after:
+			return "", errors.New("the time limit for parsing the text has expired")
+		default:
+			path, errLaunch := launcher.New().Headless(true).Launch()
+			if errLaunch != nil {
+				return "", errLaunch
+			}
+			browser := rod.New().ControlURL(path).MustConnect()
+			defer func() {
+				if errClose := browser.Close(); errClose != nil {
+					log.Println(errClose)
+				}
+			}()
+			page := browser.MustPage(url)
+			page.Timeout(10 * time.Second).MustWaitLoad()
+			text, errElement := page.MustElement("body").Text()
+			if errElement != nil {
+				return "", errElement
+			}
+			return text, nil
+		}
 	}
-	return text, nil
 }

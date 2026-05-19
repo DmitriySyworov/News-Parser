@@ -6,6 +6,7 @@ import (
 	"app/news-parser/internal/di"
 	"app/news-parser/internal/model"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -50,9 +51,9 @@ func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, uuid
 	if isAddText {
 		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
 		go customParsing.CustomParseArticle()
-		go customParsing.createUserArticles()
+		go customParsing.createUserArticles() //!!
 		//for customLink := range customParsing.ArticleUserCh {
-		//	//sliceUserArticle = append(sliceUserArticle, customLink) !!!!
+		//	sliceUserArticle = append(sliceUserArticle, customLink)
 		//}
 	} else {
 		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
@@ -101,7 +102,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 	var errParseText error
 	if addText {
 		text, errParseText = ParseText(userArticle.URL)
-		if errParseText != nil {
+		if errParseText != nil || len(text) < 10 {
 			sliceError = append(sliceError, custom_errors.Error{
 				Message: ErrFailedParseText.Error(),
 				Status:  http.StatusUnprocessableEntity,
@@ -148,7 +149,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			ArticleUUID: userArticle.ArticleUUID,
 			UserUUID:    userArticle.UserUUID,
 		}
-		errUpdateCategory := s.Repo.UpdateUserArticle(userUUID, &resUserArticle)
+		errUpdateCategory := s.Repo.UpdateUserArticle(userUUID, resUserArticle.ArticleUUID, &resUserArticle)
 		if errUpdateCategory != nil {
 			sliceError = append(sliceError, custom_errors.Error{
 				Message: ErrFailedUpdateUserArticle.Error(),
@@ -166,7 +167,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			ArticleUUID: userArticle.ArticleUUID,
 			UserUUID:    userArticle.UserUUID,
 		}
-		errUpdateCategory := s.Repo.UpdateUserArticle(userUUID, &resUserArticle)
+		errUpdateCategory := s.Repo.UpdateUserArticle(userUUID, resUserArticle.ArticleUUID, &resUserArticle)
 		if errUpdateCategory != nil {
 			sliceError = append(sliceError, custom_errors.Error{
 				Message: ErrFailedUpdateUserArticle.Error(),
@@ -193,16 +194,22 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 	}
 	var respUserArticles []ResponseUserArticle
 	if category != "" && !addText && !deleteText {
-		sliceUserArts, errGetByDomain := s.Repo.GetAllUserArticlesByDomain(userUUID, domain)
-		if errGetByDomain != nil {
+		if !s.Repo.IsDomainArticleExist(userUUID, domain) {
 			sliceError = append(sliceError, custom_errors.Error{
 				Message: ErrNotFoundUserArticle.Error(),
 				Status:  http.StatusNotFound,
 			})
 			return nil, sliceError
 		}
-		for _, userArticle := range sliceUserArts {
-			userArticle.Category = category
+		sliceUpdateArticles, errUpdateBatch := s.Repo.UpdateOneColumnByDomainAll(userUUID, domain, "category", category)
+		if errUpdateBatch != nil {
+			sliceError = append(sliceError, custom_errors.Error{
+				Message: ErrNotFoundUserArticle.Error(),
+				Status:  http.StatusNotFound,
+			})
+			return nil, sliceError
+		}
+		for _, userArticle := range sliceUpdateArticles {
 			respUserArticles = append(respUserArticles, ResponseUserArticle{
 				Article: userArticle,
 				SuccessOperation: SuccessOfTheOperation{
@@ -213,66 +220,103 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 			})
 		}
 		return respUserArticles, nil
+	} else if addText && !deleteText {
+		sliceUserArticles, errGetUserArticlesByDomain := s.Repo.GetUserArticlesByDomain(userUUID, domain, false)
+		if errGetUserArticlesByDomain != nil {
+			sliceError = append(sliceError, custom_errors.Error{
+				Message: ErrNotFoundUserArticle.Error(),
+				Status:  http.StatusNotFound,
+			})
+			return nil, sliceError
+		}
+		var wg sync.WaitGroup
+		wg.Add(len(sliceUserArticles))
+		for _, article := range sliceUserArticles {
+			go func() {
+				defer wg.Done()
+				oldCategory := article.Category
+				oldText := article.Text
+				text, errParseText := ParseText(article.URL)
+				if errParseText != nil || text == "" {
+					respUserArticles = append(respUserArticles, ResponseUserArticle{
+						Article: article,
+						SuccessOperation: SuccessOfTheOperation{
+							Success: false,
+							Message: ErrFailedParseText.Error(),
+							Status:  http.StatusUnprocessableEntity,
+						},
+					})
+					return
+				}
+				if category != "" {
+					article.Category = category
+				}
+				article.Text = text
+				errUpdateArticle := s.Repo.UpdateUserArticle(userUUID, article.ArticleUUID, &article)
+				if errUpdateArticle != nil {
+					article.Category = oldCategory
+					article.Text = oldText
+					respUserArticles = append(respUserArticles, ResponseUserArticle{
+						Article: article,
+						SuccessOperation: SuccessOfTheOperation{
+							Message: ErrFailedUpdateUserArticle.Error(),
+							Status:  http.StatusInternalServerError,
+						},
+					})
+					return
+				}
+				respUserArticles = append(respUserArticles, ResponseUserArticle{
+					Article: article,
+					SuccessOperation: SuccessOfTheOperation{
+						Success: true,
+						Message: "Update",
+						Status:  http.StatusOK,
+					},
+				})
+			}()
+		}
+		wg.Wait()
+		return respUserArticles, nil
+	} else if !addText && deleteText {
+		sliceUserArticles, errGetUserArticlesByDomain := s.Repo.GetUserArticlesByDomain(userUUID, domain, true)
+		if errGetUserArticlesByDomain != nil {
+			sliceError = append(sliceError, custom_errors.Error{
+				Message: ErrNotFoundUserArticle.Error(),
+				Status:  http.StatusNotFound,
+			})
+			return nil, sliceError
+		}
+		for _, article := range sliceUserArticles {
+			oldCategory := article.Category
+			oldText := article.Text
+			if category != "" {
+				article.Category = category
+			}
+			article.Text = "-"
+			errUpdateArticle := s.Repo.UpdateUserArticle(userUUID, article.ArticleUUID, &article)
+			if errUpdateArticle != nil {
+				article.Category = oldCategory
+				article.Text = oldText
+				respUserArticles = append(respUserArticles, ResponseUserArticle{
+					Article: article,
+					SuccessOperation: SuccessOfTheOperation{
+						Success: false,
+						Message: ErrFailedUpdateUserArticle.Error(),
+						Status:  http.StatusInternalServerError,
+					},
+				})
+			}
+			respUserArticles = append(respUserArticles, ResponseUserArticle{
+				Article: article,
+				SuccessOperation: SuccessOfTheOperation{
+					Success: true,
+					Message: "Update",
+					Status:  http.StatusOK,
+				},
+			})
+		}
+		return respUserArticles, nil
 	}
-	//} else if addText && !deleteText {
-	//	sliceUserArticles, errGetUserArticlesByDomain := s.Repo.GetUserArticlesByDomain(userUUID, domain, false)
-	//	if errGetUserArticlesByDomain != nil {
-	//		sliceError = append(sliceError, custom_errors.Error{
-	//			Message: ErrNotFoundUserArticle.Error(),
-	//			Status:  http.StatusNotFound,
-	//		})
-	//		return nil, sliceError
-	//	}
-	//	for _, article := range sliceUserArticles {
-	//		text, errParseText := ParseText(article.URL)
-	//		if errParseText != nil {
-	//			respUserArticles = append(respUserArticles, ResponseUserArticle{
-	//				Article: article,
-	//				Error:   ErrFailedParseText.Error(),
-	//				Status:  http.StatusUnprocessableEntity,
-	//			})
-	//		}
-	//		updateArticle, errUpdateArticle := s.Repo.UpdateOneColumnUserArticle(userUUID, text, "text")
-	//		if errUpdateArticle != nil {
-	//			respUserArticles = append(respUserArticles, ResponseUserArticle{
-	//				Article: article,
-	//				Error:   ErrFailedUpdateUserArticle.Error(),
-	//				Status:  http.StatusInternalServerError,
-	//			})
-	//		} else {
-	//			respUserArticles = append(respUserArticles, ResponseUserArticle{
-	//				Article: *updateArticle,
-	//				Status:  http.StatusOK,
-	//			})
-	//		}
-	//	}
-	//	return respUserArticles, nil
-	//} else if !addText && deleteText {
-	//	sliceUserArticles, errGetUserArticlesByDomain := s.Repo.GetUserArticlesByDomain(userUUID, domain, true)
-	//	if errGetUserArticlesByDomain != nil {
-	//		sliceError = append(sliceError, custom_errors.Error{
-	//			Message: ErrNotFoundUserArticle.Error(),
-	//			Status:  http.StatusNotFound,
-	//		})
-	//		return nil, sliceError
-	//	}
-	//	for _, article := range sliceUserArticles {
-	//		updateArticle, errUpdateArticle := s.Repo.UpdateOneColumnUserArticle(userUUID, "-", "text")
-	//		if errUpdateArticle != nil {
-	//			respUserArticles = append(respUserArticles, ResponseUserArticle{
-	//				Article: article,
-	//				Error:   ErrFailedUpdateUserArticle.Error(),
-	//				Status:  http.StatusInternalServerError,
-	//			})
-	//		} else {
-	//			respUserArticles = append(respUserArticles, ResponseUserArticle{
-	//				Article: *updateArticle,
-	//				Status:  http.StatusOK,
-	//			})
-	//		}
-	//	}
-	//	return respUserArticles, nil
-	//}
 	return nil, nil
 }
 func (s *ServiceArticleUser) helperValidateUserAndAddTextAndDeleteText(userUUID, addTextStr, deleteTextStr string) (bool, bool, []custom_errors.Error) {

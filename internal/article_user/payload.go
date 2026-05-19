@@ -21,7 +21,6 @@ type ResponseSliceUserArticles struct {
 }
 type ResponseUserArticle struct {
 	Article          model.UserArticle
-	Status           int
 	SuccessOperation SuccessOfTheOperation `json:"success-of-the-operation"`
 }
 type ResponseCreateUserArticle struct {

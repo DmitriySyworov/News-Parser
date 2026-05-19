@@ -4,7 +4,6 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/open_Db"
-	"fmt"
 	"log"
 	"time"
 
@@ -20,9 +19,9 @@ func NewRepositoryArticleUser(postgres *open_Db.PostgresDb) *RepositoryArticleUs
 		PostgresDb: postgres,
 	}
 }
-func (r *RepositoryArticleUser) UpdateUserArticle(userUUID string, userArticle *model.UserArticle) error {
+func (r *RepositoryArticleUser) UpdateUserArticle(userUUID, articleUUID string, userArticle *model.UserArticle) error {
 	res := r.PostgresDb.
-		Where("user_uuid = ? AND article_uuid = ?", userUUID, userArticle.ArticleUUID).
+		Where("user_uuid = ? AND article_uuid = ?", userUUID, articleUUID).
 		Updates(&userArticle)
 	if res.Error != nil {
 		return res.Error
@@ -42,34 +41,40 @@ func (r *RepositoryArticleUser) UpdateOneColumnUserArticle(userUUID, articleUUID
 	}
 	return &userArticle, nil
 }
+
+func (r *RepositoryArticleUser) UpdateOneColumnByDomainAll(userUUID, domain, nameColumn, data string) ([]model.UserArticle, error) {
+	var userArticles []model.UserArticle
+	resDomain := "%" + domain + "%"
+	res := r.PostgresDb.
+		Model(&model.UserArticle{}).
+		Clauses(clause.Returning{}).
+		Where("user_uuid = ? AND url LIKE ?", userUUID, resDomain).
+		Update(nameColumn, data).
+		Scan(&userArticles)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return userArticles, nil
+}
 func (r *RepositoryArticleUser) GetUserArticlesByDomain(userUUID string, domain string, flagWithText bool) ([]model.UserArticle, error) {
 	var sliceUserArticle []model.UserArticle
-	resDomain := fmt.Sprint("%" + domain + "%")
+	resDomain := "%" + domain + "%"
 	if flagWithText {
 		res := r.PostgresDb.
-			Where("user_uuid = ? AND url LIKE ? AND text IS NOT NULL OR text != '-'", userUUID, resDomain).
+			Raw(`SELECT *FROM user_articles
+WHERE user_uuid = ? AND url LIKE ? AND length(text) > 1 `, userUUID, resDomain).
 			Scan(&sliceUserArticle)
 		if res.Error != nil || len(sliceUserArticle) == 0 {
 			return nil, ErrNotFoundUserArticle
 		}
 	} else {
 		res := r.PostgresDb.
-			Where("user_uuid = ? AND url LIKE ? AND text IS NULL OR text = '-'", userUUID, resDomain).
+			Raw(`SELECT *FROM user_articles
+WHERE user_uuid = ? AND url LIKE ? AND length(text) <= 1 `, userUUID, resDomain).
 			Scan(&sliceUserArticle)
 		if res.Error != nil || len(sliceUserArticle) == 0 {
 			return nil, ErrNotFoundUserArticle
 		}
-	}
-	return sliceUserArticle, nil
-}
-func (r *RepositoryArticleUser) GetAllUserArticlesByDomain(userUUID string, domain string) ([]model.UserArticle, error) {
-	var sliceUserArticle []model.UserArticle
-	resDomain := fmt.Sprint("%" + domain + "%")
-	res := r.PostgresDb.
-		Where("user_uuid = ? AND url LIKE ?", userUUID, resDomain).
-		Scan(&sliceUserArticle)
-	if res.Error != nil || len(sliceUserArticle) == 0 {
-		return nil, ErrNotFoundUserArticle
 	}
 	return sliceUserArticle, nil
 }
@@ -243,6 +248,16 @@ func (r *RepositoryArticleUser) RecoveryAllUserArticle(userUUID string) ([]model
 		return nil, res.Error
 	}
 	return sliceUserArticle, nil
+}
+func (r *RepositoryArticleUser) IsDomainArticleExist(userUUID, domain string) bool {
+	resDomain := "%" + domain + "%"
+	res := r.PostgresDb.
+		Where("user_uuid = ? AND url LIKE ?", userUUID, resDomain).
+		First(&model.UserArticle{})
+	if res.Error != nil {
+		return false
+	}
+	return true
 }
 func (r *RepositoryArticleUser) IsUserArticleRemoveExistByUUID(userUUID, articleUUID string) bool {
 	res := r.PostgresDb.Unscoped().

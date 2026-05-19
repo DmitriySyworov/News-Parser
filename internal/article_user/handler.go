@@ -160,11 +160,13 @@ func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
 				})
+				handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusBadRequest)
 			case handler_request.ErrInvalidData:
 				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusUnprocessableEntity,
 				})
+				handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusUnprocessableEntity)
 			}
 			return
 		}
