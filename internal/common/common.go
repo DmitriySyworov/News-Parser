@@ -4,7 +4,6 @@ import (
 	"app/news-parser/configs"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/pkg/send_letter"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,20 +35,27 @@ const (
 )
 
 func DateNow() time.Time {
-	now := time.Now()
-	if now.Month() < 10 && now.Day() < 10 {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-0%d-0%d", now.Year(), now.Month(), now.Day()))
-		return date
-	} else if now.Day() < 10 {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-%d-0%d", now.Year(), now.Month(), now.Day()))
-		return date
-	} else if now.Month() < 10 {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-0%d-%d", now.Year(), now.Month(), now.Day()))
-		return date
-	} else {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-%d-%d", now.Year(), now.Month(), now.Day()))
-		return date
+	now := time.Now().Format(time.DateOnly)
+	date, _ := time.Parse(now, time.DateOnly)
+	return date
+}
+func SendRequest(url string) (*http.Response, error) {
+	request, errReq := http.NewRequest(http.MethodGet, url, nil)
+	if errReq != nil {
+		return nil, errReq
 	}
+	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+	request.Header.Set("Accept-Language", "ru,en;q=0.9,en-US;q=0.8")
+	request.Header.Set("Connection", "keep-alive")
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+	response, errResp := client.Do(request)
+	if errResp != nil {
+		return nil, errResp
+	}
+	return response, nil
 }
 func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_errors.Error) {
 	var sliceError []custom_errors.Error

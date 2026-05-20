@@ -51,13 +51,13 @@ func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, uuid
 	if isAddText {
 		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
 		go customParsing.CustomParseArticle()
-		go customParsing.createUserArticles() //!!
-		//for customLink := range customParsing.ArticleUserCh {
-		//	sliceUserArticle = append(sliceUserArticle, customLink)
-		//}
+		go customParsing.createUserArticles(true)
+		for customLink := range customParsing.RespUserCh {
+			sliceUserArticle = append(sliceUserArticle, customLink)
+		}
 	} else {
 		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
-		go customParsing.createUserArticles()
+		go customParsing.createUserArticles(false)
 		for customArticle := range customParsing.RespUserCh {
 			sliceUserArticle = append(sliceUserArticle, customArticle)
 		}
