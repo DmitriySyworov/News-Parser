@@ -3,6 +3,7 @@ package common
 import (
 	"app/news-parser/configs"
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/response"
 	"app/news-parser/pkg/send_letter"
 	"math/rand/v2"
 	"net/http"
@@ -10,11 +11,6 @@ import (
 	"strings"
 	"time"
 )
-
-type ResponseSuccessful struct {
-	Success bool
-	Data    any
-}
 
 const (
 	EventClickCategory         = "click_category"
@@ -73,20 +69,20 @@ func SendRequest(url string) (*http.Response, error) {
 	client := http.Client{
 		Timeout: 5 * time.Second,
 	}
-	response, errResp := client.Do(request)
+	resp, errResp := client.Do(request)
 	if errResp != nil {
 		return nil, errResp
 	}
-	return response, nil
+	return resp, nil
 }
-func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_errors.Error) {
-	var sliceError []custom_errors.Error
+func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []response.Error) {
+	var sliceError []response.Error
 	var offset, limit int
 	var errParseOffset, errParseLimit error
 	if offsetStr != "" {
 		offset, errParseOffset = strconv.Atoi(offsetStr)
 		if errParseOffset != nil {
-			sliceError = append(sliceError, custom_errors.Error{
+			sliceError = append(sliceError, response.Error{
 				Message: custom_errors.ErrIncorrectOffset.Error(),
 				Status:  http.StatusBadRequest,
 			})
@@ -95,7 +91,7 @@ func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_erro
 		offset = OffsetDefault
 	}
 	if offset < 0 {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: custom_errors.ErrNegativeOffset.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -103,7 +99,7 @@ func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_erro
 	if limitStr != "" {
 		limit, errParseLimit = strconv.Atoi(limitStr)
 		if errParseLimit != nil {
-			sliceError = append(sliceError, custom_errors.Error{
+			sliceError = append(sliceError, response.Error{
 				Message: custom_errors.ErrIncorrectLimit.Error(),
 				Status:  http.StatusBadRequest,
 			})
@@ -112,7 +108,7 @@ func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_erro
 		limit = LimitDefault
 	}
 	if limit < 0 {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: custom_errors.ErrNegativeLimit.Error(),
 			Status:  http.StatusBadRequest,
 		})

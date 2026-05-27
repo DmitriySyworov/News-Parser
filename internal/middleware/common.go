@@ -1,12 +1,12 @@
 package middleware
 
 import (
-	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/response"
 )
 
 type ManagerMiddleware struct {
 	Signature string
-	respError custom_errors.ResponseError
+	resp      response.Response[any]
 	ContextToken
 }
 type ContextToken struct {

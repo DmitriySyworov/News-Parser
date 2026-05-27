@@ -2,15 +2,6 @@ package custom_errors
 
 import "errors"
 
-type ResponseError struct {
-	Success bool
-	Errors  []Error
-}
-type Error struct {
-	Message string
-	Status  int
-}
-
 var (
 	ErrNegativeOffset     = errors.New("offset cannot be less than zero")
 	ErrNegativeLimit      = errors.New("limit cannot be less than zero")

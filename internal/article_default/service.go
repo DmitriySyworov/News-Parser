@@ -5,6 +5,7 @@ import (
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
 	"app/news-parser/internal/model"
+	"app/news-parser/internal/response"
 	"app/news-parser/pkg/event_bus"
 	"log"
 	"net/http"
@@ -42,10 +43,10 @@ func NewServiceArticle(repoArticle *RepositoryArticle, dep *ServiceArticleDep) *
 		ServiceArticleDep: dep,
 	}
 }
-func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitStr, filterStr, withTextStr string) ([]ResponseCategoryToday, []custom_errors.Error) {
-	var sliceError []custom_errors.Error
+func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitStr, filterStr, withTextStr string) ([]ResponseCategoryToday, []response.Error) {
+	var sliceError []response.Error
 	if !validateCategories(category) {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrCategory.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -60,7 +61,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	} else if filterStr == "false" {
 		filter = false
 	} else {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrIncorrectOnlyArticle.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -71,7 +72,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	} else if withTextStr == "false" || withTextStr == "" {
 		withText = false
 	} else {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: custom_errors.ErrIncorrectWithText.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -81,7 +82,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	}
 	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, offset, limit, filter, withText)
 	if errGetAllArticle != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrNotFoundArticle.Error(),
 			Status:  http.StatusNotFound,
 		})
@@ -93,17 +94,17 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	})
 	return allArticle, nil
 }
-func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, *custom_errors.Error) {
+func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, *response.Error) {
 	id, errParseId := strconv.Atoi(idStr)
 	if errParseId != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: custom_errors.ErrIncorrectArticleId.Error(),
 			Status:  http.StatusBadRequest,
 		}
 	}
 	article, errGetArticle := s.repo.GetArticleToday(id)
 	if errGetArticle != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrLoadArticles.Error(),
 			Status:  http.StatusInternalServerError,
 		}
@@ -115,10 +116,10 @@ func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, *cu
 	return article, nil
 
 }
-func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, []custom_errors.Error) {
-	var sliceError []custom_errors.Error
+func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, []response.Error) {
+	var sliceError []response.Error
 	if !validateCategories(category) {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrCategory.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -129,7 +130,7 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	}
 	date, errParseDate := time.Parse(time.DateOnly, dateStr)
 	if errParseDate != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: custom_errors.ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -139,7 +140,7 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	}
 	archiveArticles, errGetArticlesArch := s.repo.GetArticlesInCategoryArchive(category, offset, limit, date)
 	if errGetArticlesArch != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: errGetArticlesArch.Error(),
 			Status:  http.StatusUnauthorized,
 		})
@@ -159,10 +160,10 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	})
 	return respCategoryArch, nil
 }
-func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, *custom_errors.Error) {
+func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, *response.Error) {
 	archArticle, errGetArchArticle := s.repo.GetArchiveArticle(uuid)
 	if errGetArchArticle != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrNotFoundArticle.Error(),
 			Status:  http.StatusNotFound,
 		}

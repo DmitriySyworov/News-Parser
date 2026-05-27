@@ -2,9 +2,9 @@ package stat
 
 import (
 	"app/news-parser/internal/common"
-	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/open_Db"
+	"app/news-parser/internal/response"
 	"context"
 	"log"
 	"net/http"
@@ -24,7 +24,7 @@ func NewRepositoryStat(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) *Re
 		PostgresDb: postgres,
 	}
 }
-func (r *RepositoryStat) GetStatCategoryAllTime() (*ResponseStatCategoryAll, *custom_errors.Error) {
+func (r *RepositoryStat) GetStatCategoryAllTime() (*ResponseStatCategoryAll, *response.Error) {
 	var dbStat []CategoryDbAll
 	res := r.DB.Model(&model.CategoryStat{}).Raw(`
 SELECT category, sum(click) as sum_click, row_number() over (Order by category) AS place
@@ -33,7 +33,7 @@ GROUP BY category
 ORDER BY sum_click
 `).Scan(&dbStat)
 	if res.Error != nil || len(dbStat) == 0 {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrStatNotFound.Error(),
 			Status:  http.StatusNotFound,
 		}
@@ -75,7 +75,7 @@ func (r *RepositoryStat) GetStatArticleByDate(date time.Time) (*ResponseStatArti
 		Articles: dbStat,
 	}, nil
 }
-func (r *RepositoryStat) GetStatArticleAllTime() (*ResponseStatArticleAll, *custom_errors.Error) {
+func (r *RepositoryStat) GetStatArticleAllTime() (*ResponseStatArticleAll, *response.Error) {
 	var dbStat []ArticleDbAll
 	res := r.DB.Model(&model.CategoryStat{}).Raw(`
 SELECT url, sum(click) as sum_click, row_number() over (Order by url) AS place
@@ -84,7 +84,7 @@ GROUP BY url
 ORDER BY sum_click
 `).Scan(&dbStat)
 	if res.Error != nil || len(dbStat) == 0 {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrStatNotFound.Error(),
 			Status:  http.StatusNotFound,
 		}
@@ -144,8 +144,8 @@ func (r *RepositoryStat) GetUserArticleStat(userUUID string, date time.Time) (*R
 		return nil, resCount.Error
 	}
 	return &ResponseUserArticleStat{
-		NowExist: int(countArticle),
-		UserArticleStat : &userArticleStat,
+		NowExist:        int(countArticle),
+		UserArticleStat: &userArticleStat,
 	}, nil
 }
 func (r *RepositoryStat) GetUserArticleAllTimeStat(userUUID string) (*ResponseUserArticleAllTimeStat, error) {
@@ -166,8 +166,8 @@ func (r *RepositoryStat) GetUserArticleAllTimeStat(userUUID string) (*ResponseUs
 		return nil, resCount.Error
 	}
 	return &ResponseUserArticleAllTimeStat{
-			NowExist:  int(countArticle),
-			UserArticleAllTimeStat : &allTimeStat,
+		NowExist:               int(countArticle),
+		UserArticleAllTimeStat: &allTimeStat,
 	}, nil
 }
 func (r *RepositoryStat) addClickCategory(category string) {

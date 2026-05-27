@@ -5,6 +5,7 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/model"
+	"app/news-parser/internal/response"
 	"app/news-parser/pkg/JWT"
 	"app/news-parser/pkg/generate_random"
 	"app/news-parser/pkg/handler_request"
@@ -35,24 +36,24 @@ const (
 	actionUpdate = "update"
 )
 
-func (s *ServiceUser) RemoveMyUser(userUUID, password, action string) (*common.ResponseAuth, *custom_errors.Error) {
+func (s *ServiceUser) RemoveMyUser(userUUID, password, action string) (*common.ResponseAuth, *response.Error) {
 	user, errGetUser := s.Repo.GetUserByUUID(userUUID)
 	if errGetUser != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
 			Status:  http.StatusNotFound,
 		}
 	}
 	errPassword := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if errPassword != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrIncorrectPassword.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
 	token, errSecurity := s.helperSecurity(user.Email, action, nil)
 	if errSecurity != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: errSecurity.Error(),
 			Status:  http.StatusInternalServerError,
 		}
@@ -62,10 +63,10 @@ func (s *ServiceUser) RemoveMyUser(userUUID, password, action string) (*common.R
 		JWTTemp: token,
 	}, nil
 }
-func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*ResponseUser, *common.ResponseAuth, *custom_errors.Error) {
+func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*ResponseUser, *common.ResponseAuth, *response.Error) {
 	user, errGetUser := s.Repo.GetUserByUUID(userUUID)
 	if errGetUser != nil {
-		return nil, nil, &custom_errors.Error{
+		return nil, nil, &response.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
 			Status:  http.StatusNotFound,
 		}
@@ -73,7 +74,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 	if body.NewEmail != "" || body.NewPassword != "" {
 		errPassword := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))
 		if errPassword != nil {
-			return nil, nil, &custom_errors.Error{
+			return nil, nil, &response.Error{
 				Message: ErrIncorrectPassword.Error(),
 				Status:  http.StatusUnauthorized,
 			}
@@ -82,7 +83,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 	if body.NewPassword != "" {
 		dataPassword, errHashed := bcrypt.GenerateFromPassword([]byte(body.NewPassword), bcrypt.DefaultCost)
 		if errHashed != nil {
-			return nil, nil, &custom_errors.Error{
+			return nil, nil, &response.Error{
 				Message: custom_errors.ErrFailedSecurity.Error(),
 				Status:  http.StatusInternalServerError,
 			}
@@ -92,7 +93,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 	if body.Name != "" && body.NewEmail == "" && body.NewPassword == "" {
 		updateUser, errUpdateUser := s.Repo.UpdateMyUserOneColumn(userUUID, "name", body.Name)
 		if errUpdateUser != nil {
-			return nil, nil, &custom_errors.Error{
+			return nil, nil, &response.Error{
 				Message: ErrUpdateUser.Error(),
 				Status:  http.StatusInternalServerError,
 			}
@@ -106,7 +107,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 	} else if body.NewEmail != "" {
 		token, errSecurity := s.helperSecurity(body.NewEmail, actionUpdate, body)
 		if errSecurity != nil {
-			return nil, nil, &custom_errors.Error{
+			return nil, nil, &response.Error{
 				Message: errSecurity.Error(),
 				Status:  http.StatusInternalServerError,
 			}
@@ -118,7 +119,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 	} else {
 		token, errSecurity := s.helperSecurity(user.Email, actionUpdate, body)
 		if errSecurity != nil {
-			return nil, nil, &custom_errors.Error{
+			return nil, nil, &response.Error{
 				Message: errSecurity.Error(),
 				Status:  http.StatusInternalServerError,
 			}
@@ -162,23 +163,23 @@ func (s *ServiceUser) helperSecurity(email, action string, bodyUpdate *RequestUp
 	}
 	return "", ErrIncorrectAction
 }
-func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uint) (*model.User, *custom_errors.Error) {
+func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uint) (*model.User, *response.Error) {
 	user, errGetUser := s.Repo.GetUserByUUID(userUUID)
 	if errGetUser != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
 			Status:  http.StatusNotFound,
 		}
 	}
 	tempData, errGetSession := s.Repo.GetSession(sessionID, action)
 	if errGetSession != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: custom_errors.ErrSession.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
 	if code != tempData.TempCode {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: custom_errors.ErrIncorrectCode.Error(),
 			Status:  http.StatusBadRequest,
 		}
@@ -187,7 +188,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 	case actionDelete:
 		errDeleteUser := s.Repo.DeleteMyUser(userUUID)
 		if errDeleteUser != nil {
-			return nil, &custom_errors.Error{
+			return nil, &response.Error{
 				Message: ErrFailedDeleteUser.Error(),
 				Status:  http.StatusInternalServerError,
 			}
@@ -196,7 +197,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 	case actionRemove:
 		errRemoveUser := s.Repo.RemoveMyUser(userUUID)
 		if errRemoveUser != nil {
-			return nil, &custom_errors.Error{
+			return nil, &response.Error{
 				Message: ErrFailedRemoveUser.Error(),
 				Status:  http.StatusInternalServerError,
 			}
@@ -212,7 +213,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrUpdateUser.Error(),
 					Status:  http.StatusInternalServerError,
 				}
@@ -227,7 +228,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrUpdateUser.Error(),
 					Status:  http.StatusInternalServerError,
 				}
@@ -242,7 +243,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrUpdateUser.Error(),
 					Status:  http.StatusInternalServerError,
 				}
@@ -257,7 +258,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 			}
 			errUpdate := s.Repo.UpdateMyUserFull(&resUser)
 			if errUpdate != nil {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrUpdateUser.Error(),
 					Status:  http.StatusInternalServerError,
 				}
@@ -266,7 +267,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 		} else if tempData.Name == "" && tempData.Email != "" && tempData.Password == "" {
 			resUser, errUpdate := s.Repo.UpdateMyUserOneColumn(userUUID, "email", tempData.Email)
 			if errUpdate != nil {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrUpdateUser.Error(),
 					Status:  http.StatusInternalServerError,
 				}
@@ -275,7 +276,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 		} else if tempData.Name == "" && tempData.Email == "" && tempData.Password != "" {
 			resUser, errUpdate := s.Repo.UpdateMyUserOneColumn(userUUID, "password", tempData.Password)
 			if errUpdate != nil {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrUpdateUser.Error(),
 					Status:  http.StatusInternalServerError,
 				}
@@ -283,12 +284,12 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 			return resUser, nil
 		}
 	default:
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrIncorrectAction.Error(),
 			Status:  http.StatusBadRequest,
 		}
 	}
-	return nil, &custom_errors.Error{
+	return nil, &response.Error{
 		Message: handler_request.ErrInvalidData.Error(),
 		Status:  http.StatusBadRequest,
 	}

@@ -4,6 +4,7 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
+	"app/news-parser/internal/response"
 	"app/news-parser/pkg/event_bus"
 	"log"
 	"net/http"
@@ -25,10 +26,10 @@ func NewServiceStat(repo *RepositoryStat, dep *ServiceStatDep) *ServiceStat {
 		ServiceStatDep: dep,
 	}
 }
-func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCategoryDate, *custom_errors.Error) {
+func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCategoryDate, *response.Error) {
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		}
@@ -37,7 +38,7 @@ func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCatego
 	if date == common.DateNow() {
 		statCategoryToday, errGetToday := s.Repo.GetStatCategoryToday()
 		if errGetToday != nil || len(statCategoryToday) == 0 {
-			return nil, &custom_errors.Error{
+			return nil, &response.Error{
 				Message: ErrStatNotFound.Error(),
 				Status:  http.StatusNotFound,
 			}
@@ -48,7 +49,7 @@ func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCatego
 			var dbResp CategoryDbDate
 			category, ok := stToday.Member.(string)
 			if !ok {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrStatNotFound.Error(),
 					Status:  http.StatusNotFound,
 				}
@@ -65,7 +66,7 @@ func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCatego
 	} else {
 		statCategories, errGetStat := s.Repo.GetStatCategoryByDate(date)
 		if errGetStat != nil {
-			return nil, &custom_errors.Error{
+			return nil, &response.Error{
 				Message: ErrStatNotFound.Error(),
 				Status:  http.StatusNotFound,
 			}
@@ -73,10 +74,10 @@ func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCatego
 		return statCategories, nil
 	}
 }
-func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticleDate, *custom_errors.Error) {
+func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticleDate, *response.Error) {
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		}
@@ -84,7 +85,7 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 	if date == common.DateNow() {
 		statArticleToday, errGetToday := s.Repo.GetStatArticleToday()
 		if errGetToday != nil || len(statArticleToday) == 0 {
-			return nil, &custom_errors.Error{
+			return nil, &response.Error{
 				Message: ErrStatNotFound.Error(),
 				Status:  http.StatusNotFound,
 			}
@@ -96,7 +97,7 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 			var dbResp ArticleDbDate
 			url, ok := stToday.Member.(string)
 			if !ok {
-				return nil, &custom_errors.Error{
+				return nil, &response.Error{
 					Message: ErrStatNotFound.Error(),
 					Status:  http.StatusNotFound,
 				}
@@ -113,7 +114,7 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 	} else {
 		statCategories, errGetStat := s.Repo.GetStatArticleByDate(date)
 		if errGetStat != nil {
-			return nil, &custom_errors.Error{
+			return nil, &response.Error{
 				Message: ErrStatNotFound.Error(),
 				Status:  http.StatusNotFound,
 			}
@@ -121,17 +122,17 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 		return statCategories, nil
 	}
 }
-func (s *ServiceStat) GetUserArticleStat(userUUID, dateStr string) (*ResponseUserArticleStat, []custom_errors.Error) {
-	var sliceError []custom_errors.Error
+func (s *ServiceStat) GetUserArticleStat(userUUID, dateStr string) (*ResponseUserArticleStat, []response.Error) {
+	var sliceError []response.Error
 	if !s.IRepoUser.IsUserExistByUUID(userUUID) {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
 			Status:  http.StatusNotFound,
 		})
 	}
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -141,7 +142,7 @@ func (s *ServiceStat) GetUserArticleStat(userUUID, dateStr string) (*ResponseUse
 	}
 	statUser, errGetStat := s.Repo.GetUserArticleStat(userUUID, date)
 	if errGetStat != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrStatNotFound.Error(),
 			Status:  http.StatusNotFound,
 		})
@@ -149,16 +150,16 @@ func (s *ServiceStat) GetUserArticleStat(userUUID, dateStr string) (*ResponseUse
 	}
 	return statUser, nil
 }
-func (s *ServiceStat) GetUserArticleAllTimeStat(userUUID string) (*ResponseUserArticleAllTimeStat, *custom_errors.Error) {
+func (s *ServiceStat) GetUserArticleAllTimeStat(userUUID string) (*ResponseUserArticleAllTimeStat, *response.Error) {
 	if !s.IRepoUser.IsUserExistByUUID(userUUID) {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
 			Status:  http.StatusNotFound,
 		}
 	}
 	respAllTimeStat, errGetStat := s.Repo.GetUserArticleAllTimeStat(userUUID)
 	if errGetStat != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrStatNotFound.Error(),
 			Status:  http.StatusNotFound,
 		}

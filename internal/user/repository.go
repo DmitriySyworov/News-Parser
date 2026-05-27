@@ -207,7 +207,7 @@ type deleteUsersDTO struct {
 
 func (r *RepositoryUser) deleteExpiredUser() {
 	var sliceUser []deleteUsersDTO
-	res := r.PostgresDb.Raw(`SELECT uuid_user, deleted_at FROM users
+	res := r.PostgresDb.Raw(`SELECT user_uuid, deleted_at FROM users
 							  WHERE deleted_at IS NOT NULL`).
 		Scan(&sliceUser)
 	if res.Error != nil {
