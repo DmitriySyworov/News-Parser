@@ -42,19 +42,19 @@ func (r *RepositoryArticleUser) UpdateOneColumnUserArticle(userUUID, articleUUID
 	return &userArticle, nil
 }
 
-func (r *RepositoryArticleUser) UpdateOneColumnByDomainAll(userUUID, domain, nameColumn, data string) ([]model.UserArticle, error) {
+func (r *RepositoryArticleUser) UpdateCategoryByDomainAll(userUUID, domain, category string) ([]model.UserArticle, int64, error) {
 	var userArticles []model.UserArticle
 	resDomain := "%" + domain + "%"
 	res := r.PostgresDb.
 		Model(&model.UserArticle{}).
 		Clauses(clause.Returning{}).
 		Where("user_uuid = ? AND url LIKE ?", userUUID, resDomain).
-		Update(nameColumn, data).
+		Update("category", category).
 		Scan(&userArticles)
 	if res.Error != nil {
-		return nil, res.Error
+		return nil, 0, res.Error
 	}
-	return userArticles, nil
+	return userArticles, res.RowsAffected, nil
 }
 func (r *RepositoryArticleUser) GetUserArticlesByDomain(userUUID string, domain string, flagWithText bool) ([]model.UserArticle, error) {
 	var sliceUserArticle []model.UserArticle
@@ -86,19 +86,19 @@ func (r *RepositoryArticleUser) GetUserArticle(userUUID, articleUUID string) (*m
 	}
 	return &userArticle, nil
 }
-func (r *RepositoryArticleUser) RemoveAllUserArticle(uuidUser string) error {
+func (r *RepositoryArticleUser) RemoveAllUserArticle(uuidUser string) (int, error) {
 	res := r.PostgresDb.Where("user_uuid = ?", uuidUser).Delete(&model.UserArticle{})
 	if res.Error != nil {
-		return res.Error
+		return 0, res.Error
 	}
-	return nil
+	return int(res.RowsAffected), nil
 }
-func (r *RepositoryArticleUser) DeleteAllUserArticle(uuidUser string) error {
+func (r *RepositoryArticleUser) DeleteAllUserArticle(uuidUser string) (int, error) {
 	res := r.PostgresDb.Unscoped().Where("user_uuid = ?", uuidUser).Delete(&model.UserArticle{})
 	if res.Error != nil {
-		return res.Error
+		return 0, res.Error
 	}
-	return nil
+	return int(res.RowsAffected), nil
 }
 func (r *RepositoryArticleUser) GetAllUserArticlesWithoutText(userUUID, category string, offset, limit int) (*ResponseSliceUserArticles, error) {
 	var sliceUserArticle []model.UserArticle
@@ -235,7 +235,7 @@ func (r *RepositoryArticleUser) RecoveryUserArticle(userUUID, articleUUID string
 	}
 	return &userArticle, nil
 }
-func (r *RepositoryArticleUser) RecoveryAllUserArticle(userUUID string) ([]model.UserArticle, error) {
+func (r *RepositoryArticleUser) RecoveryAllUserArticle(userUUID string) ([]model.UserArticle, int, error) {
 	var sliceUserArticle []model.UserArticle
 	res := r.PostgresDb.
 		Raw(`UPDATE user_articles
@@ -245,9 +245,9 @@ func (r *RepositoryArticleUser) RecoveryAllUserArticle(userUUID string) ([]model
 			userUUID).
 		Scan(&sliceUserArticle)
 	if res.Error != nil {
-		return nil, res.Error
+		return nil, 0, res.Error
 	}
-	return sliceUserArticle, nil
+	return sliceUserArticle, int(res.RowsAffected), nil
 }
 func (r *RepositoryArticleUser) IsDomainArticleExist(userUUID, domain string) bool {
 	resDomain := "%" + domain + "%"

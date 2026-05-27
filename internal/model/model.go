@@ -38,6 +38,15 @@ type UserArticle struct {
 	ArticleUUID string `gorm:"type:char(36);unique;not null"`
 	UserUUID    string `gorm:"type:char(36)"`
 }
+type UserArticleStat struct {
+	Date        time.Time `gorm:"type:date;uniqueIndex:date_user_uuid"`
+	Created     int
+	Updated     int
+	SoftDeleted int
+	HardDeleted int
+	Recovered   int
+	UserUUID    string `gorm:"type:char(36);uniqueIndex:date_user_uuid"`
+}
 type CategoryStat struct {
 	Category string    `gorm:"type:varchar(20);not null"`
 	Click    uint      `gorm:"type:int"`

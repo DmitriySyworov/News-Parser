@@ -10,15 +10,17 @@ import (
 type HandlerArticle struct {
 	custom_errors.ResponseError
 	common.ResponseSuccessful
-	Dep *HandlerArticleDep
-}
-type HandlerArticleDep struct {
 	*ServiceArticle
+	//	Dep *HandlerArticleDep
 }
 
-func NewHandlerArticle(router *http.ServeMux, dep *HandlerArticleDep) {
+//type HandlerArticleDep struct {
+//	*ServiceArticle
+//}
+
+func NewHandlerArticle(router *http.ServeMux, service *ServiceArticle) { //dep *HandlerArticleDep) {
 	article := &HandlerArticle{
-		Dep: dep,
+		ServiceArticle: service,
 	}
 	router.HandleFunc("GET /article/today/{category}", article.GetArticlesInCategoryToday())
 	router.HandleFunc("GET /article/today/text/{id}", article.GetArticleToday())
@@ -36,7 +38,7 @@ func (h *HandlerArticle) GetArticlesInCategoryToday() http.HandlerFunc {
 		limitStr := request.URL.Query().Get("limit")
 		filterArticles := request.URL.Query().Get("isArticles")
 		withText := request.URL.Query().Get("withText")
-		allArticle, errGetAllArticle := h.Dep.ServiceArticle.GetArticlesInCategoryToday(category, offsetStr, limitStr, filterArticles, withText)
+		allArticle, errGetAllArticle := h.ServiceArticle.GetArticlesInCategoryToday(category, offsetStr, limitStr, filterArticles, withText)
 		if len(errGetAllArticle) != 0 {
 			h.ResponseError.Errors = errGetAllArticle
 			if len(errGetAllArticle) == 1 && errGetAllArticle[0].Message == ErrNotFoundArticle.Error() {
@@ -66,7 +68,7 @@ func (h *HandlerArticle) GetArticleToday() http.HandlerFunc {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			return
 		}
-		article, errGetArticle := h.Dep.ServiceArticle.GetArticleToday(idStr)
+		article, errGetArticle := h.ServiceArticle.GetArticleToday(idStr)
 		if errGetArticle != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errGetArticle)
 			if errGetArticle.Message == ErrLoadArticles.Error() {
@@ -91,7 +93,7 @@ func (h *HandlerArticle) GetArticlesInCategoryArchive() http.HandlerFunc {
 		offsetStr := request.URL.Query().Get("offset")
 		limitStr := request.URL.Query().Get("limit")
 		dateStr := request.URL.Query().Get("date")
-		articlesArchive, errGetArchive := h.Dep.ServiceArticle.GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr)
+		articlesArchive, errGetArchive := h.ServiceArticle.GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr)
 		if len(errGetArchive) != 0 {
 			h.ResponseError.Errors = errGetArchive
 			if len(errGetArchive) == 1 {
@@ -121,7 +123,7 @@ func (h *HandlerArticle) GetArchiveArticle() http.HandlerFunc {
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
 			return
 		}
-		archArticle, errGetArchArticle := h.Dep.ServiceArticle.GetArchiveArticle(uuid)
+		archArticle, errGetArchArticle := h.ServiceArticle.GetArchiveArticle(uuid)
 		if errGetArchArticle != nil {
 			h.ResponseError.Errors = append(h.ResponseError.Errors, *errGetArchArticle)
 			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusNotFound)

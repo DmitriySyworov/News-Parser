@@ -1,6 +1,7 @@
 package stat
 
 import (
+	"app/news-parser/internal/model"
 	"time"
 )
 
@@ -32,6 +33,21 @@ type ArticleDbDate struct {
 	Click uint
 	Date  time.Time
 	Place uint
+}
+type ResponseUserArticleStat struct {
+	NowExist               int
+	*model.UserArticleStat `json:"user-article-statistic"`
+}
+type ResponseUserArticleAllTimeStat struct {
+	NowExist               int
+	*UserArticleAllTimeStat `json:"user-article-statistic-all-time"`
+}
+type UserArticleAllTimeStat struct {
+	AllTimeCreated int
+	AllTimeUpdated int
+	AllTimeSoftDeleted int
+	AllTimeHardDeleted int
+	AllTimeRecovered int
 }
 type ArticleDbAll struct {
 	URL      string

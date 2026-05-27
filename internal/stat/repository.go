@@ -34,7 +34,7 @@ ORDER BY sum_click
 `).Scan(&dbStat)
 	if res.Error != nil || len(dbStat) == 0 {
 		return nil, &custom_errors.Error{
-			Message: ErrStatLoad.Error(),
+			Message: ErrStatNotFound.Error(),
 			Status:  http.StatusNotFound,
 		}
 	}
@@ -53,7 +53,7 @@ func (r *RepositoryStat) GetStatCategoryByDate(date time.Time) (*ResponseStatCat
 `, date).
 		Scan(&dbStat)
 	if res.Error != nil || len(dbStat) == 0 {
-		return nil, ErrStatLoad
+		return nil, ErrStatNotFound
 	}
 	return &ResponseStatCategoryDate{
 		Categories: dbStat,
@@ -69,7 +69,7 @@ func (r *RepositoryStat) GetStatArticleByDate(date time.Time) (*ResponseStatArti
 `, date).
 		Scan(&dbStat)
 	if res.Error != nil || len(dbStat) == 0 {
-		return nil, ErrStatLoad
+		return nil, ErrStatNotFound
 	}
 	return &ResponseStatArticleDate{
 		Articles: dbStat,
@@ -85,7 +85,7 @@ ORDER BY sum_click
 `).Scan(&dbStat)
 	if res.Error != nil || len(dbStat) == 0 {
 		return nil, &custom_errors.Error{
-			Message: ErrStatLoad.Error(),
+			Message: ErrStatNotFound.Error(),
 			Status:  http.StatusNotFound,
 		}
 	}
@@ -132,7 +132,44 @@ func (r *RepositoryStat) GetStatArticleToday() ([]redis.Z, error) {
 	}
 	return statCategories, nil
 }
-
+func (r *RepositoryStat) GetUserArticleStat(userUUID string, date time.Time) (*ResponseUserArticleStat, error) {
+	var userArticleStat model.UserArticleStat
+	res := r.PostgresDb.Where("user_uuid = ? AND date = ?", userUUID, date).First(&userArticleStat)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	var countArticle int64
+	resCount := r.PostgresDb.Model(&model.UserArticle{}).Count(&countArticle)
+	if resCount.Error != nil {
+		return nil, resCount.Error
+	}
+	return &ResponseUserArticleStat{
+		NowExist: int(countArticle),
+		UserArticleStat : &userArticleStat,
+	}, nil
+}
+func (r *RepositoryStat) GetUserArticleAllTimeStat(userUUID string) (*ResponseUserArticleAllTimeStat, error) {
+	var allTimeStat UserArticleAllTimeStat
+	res := r.PostgresDb.Raw(`SELECT SUM(created) AS all_time_created, 
+       					  		 SUM(updated) AS all_time_updated,
+       					  		 SUM(soft_deleted) AS all_time_soft_deleted,
+       					  		 SUM(hard_deleted) AS all_time_hard_deleted,
+       					  		 SUM(recovered) AS all_time_recovered
+						  FROM user_article_stats
+						  WHERE user_uuid = ?`, userUUID).First(&allTimeStat)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	var countArticle int64
+	resCount := r.PostgresDb.Model(&model.UserArticle{}).Count(&countArticle)
+	if resCount.Error != nil {
+		return nil, resCount.Error
+	}
+	return &ResponseUserArticleAllTimeStat{
+			NowExist:  int(countArticle),
+			UserArticleAllTimeStat : &allTimeStat,
+	}, nil
+}
 func (r *RepositoryStat) addClickCategory(category string) {
 	rdbCTX, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
 	defer cancel()
@@ -162,5 +199,50 @@ func (r *RepositoryStat) addClickArticle(url string) {
 	if errTrans != nil {
 		log.Println(errTrans)
 		return
+	}
+}
+func (r *RepositoryStat) addCreateUserArticle(number int, userUUID string) {
+	res := r.PostgresDb.Exec(`INSERT INTO user_article_stats (date, created, updated, soft_deleted, hard_deleted, recovered, user_uuid)
+VALUES (?, ?, 0, 0, 0, 0, ?)
+ON CONFLICT (date, user_uuid)
+DO UPDATE SET created = user_article_stats.created + ?`, time.Now(), number, userUUID, number)
+	if res.Error != nil {
+		log.Println(res.Error)
+	}
+}
+func (r *RepositoryStat) addUpdateUserArticle(number int, userUUID string) {
+	res := r.PostgresDb.Exec(`INSERT INTO user_article_stats (date, created, updated, soft_deleted, hard_deleted, recovered, user_uuid)
+VALUES  (?, 0, ?, 0, 0, 0, ?)
+ON CONFLICT (date, user_uuid)
+DO UPDATE SET updated = user_article_stats.updated + ?`, time.Now(), number, userUUID, number)
+	if res.Error != nil {
+		log.Println(res.Error)
+	}
+}
+func (r *RepositoryStat) addSoftDeleteUserArticle(number int, userUUID string) {
+	res := r.PostgresDb.Exec(`INSERT INTO user_article_stats (date, created, updated, soft_deleted, hard_deleted, recovered, user_uuid)
+VALUES  (?, 0, 0, ?, 0, 0, ?)
+ON CONFLICT (date, user_uuid)
+DO UPDATE SET soft_deleted = user_article_stats.soft_deleted + ?`, time.Now(), number, userUUID, number)
+	if res.Error != nil {
+		log.Println(res.Error)
+	}
+}
+func (r *RepositoryStat) addHardDeleteUserArticle(number int, userUUID string) {
+	res := r.PostgresDb.Exec(`INSERT INTO user_article_stats (date, created, updated, soft_deleted, hard_deleted, recovered, user_uuid)
+VALUES  (?, 0, 0, 0, ?, 0, ?)
+ON CONFLICT (date, user_uuid)
+DO UPDATE SET hard_deleted = user_article_stats.hard_deleted + ?`, time.Now(), number, userUUID, number)
+	if res.Error != nil {
+		log.Println(res.Error)
+	}
+}
+func (r *RepositoryStat) addRecoveryUserArticle(number int, userUUID string) {
+	res := r.PostgresDb.Exec(`INSERT INTO user_article_stats (date, created, updated, soft_deleted, hard_deleted, recovered, user_uuid)
+VALUES  (?, 0, 0, 0, 0, ?, ?)
+ON CONFLICT (date, user_uuid)
+DO UPDATE SET recovered = user_article_stats.recovered + ?`, time.Now(), number, userUUID, number)
+	if res.Error != nil {
+		log.Println(res.Error)
 	}
 }
