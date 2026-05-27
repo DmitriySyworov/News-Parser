@@ -14,7 +14,7 @@ func main() {
 		panic(errEnv)
 	}
 	db := open_Db.OpenPostgres(os.Getenv("DSN"))
-	errMigrate := db.AutoMigrate(&model.User{}, &model.UserArticle{}, &model.ArticleArchive{}, &model.CategoryStat{}, &model.ArticleStat{})
+	errMigrate := db.AutoMigrate(&model.User{}, &model.UserArticle{}, &model.UserArticleStat{}, &model.ArticleArchive{}, &model.CategoryStat{}, &model.ArticleStat{})
 	if errMigrate != nil {
 		panic(errMigrate)
 	}

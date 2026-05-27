@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -46,7 +45,7 @@ func NewParsing(wg *sync.WaitGroup, repo *RepositoryArticle) *Parse { //, timeou
 
 func (p *Parse) parseCategory(url, category, domain, flagText, isArticleOnHeader string) {
 	//go func() {
-	response, errResp := http.Get(url)
+	response, errResp := common.SendRequest(url)
 	if errResp != nil {
 		p.LinkCh <- ArticlesGoroutines{Error: errResp}
 	}

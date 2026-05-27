@@ -34,9 +34,9 @@ func main() {
 	//services
 	serviceAuth := auth.NewServiceAuth(repoAuth, &auth.ServiceAuthDep{IRepoUser: repoUser, Configs: conf})
 	serviceUser := user.NewServiceUser(repoUser, &user.ServiceUserDep{Configs: conf})
-	serviceArticle := article_default.NewServiceArticle(repoArticle, &article_default.ServiceArticleDep{EventBus: eventBus, IRepoStat: repoStat})
-	serviceStat := stat.NewServiceStat(repoStat, &stat.ServiceStatDep{EventBus: eventBus})
-	serviceArticleUser := article_user.NewServiceArticleUser(repoArticleUser, &article_user.ServiceArticleUserDep{IRepoUser: repoUser})
+	serviceArticle := article_default.NewServiceArticle(repoArticle, &article_default.ServiceArticleDep{IRepoStat: repoStat, EventBus: eventBus})
+	serviceStat := stat.NewServiceStat(repoStat, &stat.ServiceStatDep{IRepoUser: repoUser, EventBus: eventBus})
+	serviceArticleUser := article_user.NewServiceArticleUser(repoArticleUser, &article_user.ServiceArticleUserDep{IRepoUser: repoUser, EventBus: eventBus})
 	//goroutines
 	go serviceArticle.ReplacementInfo()
 	go serviceStat.PushInStat()
@@ -45,8 +45,8 @@ func main() {
 	//handlers
 	auth.NewHandlerAuth(router, &auth.HandlerAuthDep{ServiceAuth: serviceAuth, ManagerMiddleware: managerMiddleware})
 	user.NewHandlerUser(router, &user.HandlerUserDep{ServiceUser: serviceUser, ManagerMiddleware: managerMiddleware})
-	article_default.NewHandlerArticle(router, &article_default.HandlerArticleDep{ServiceArticle: serviceArticle})
-	stat.NewHandlerStat(router, &stat.HandlerStatDep{ServiceStat: serviceStat})
+	article_default.NewHandlerArticle(router, serviceArticle)
+	stat.NewHandlerStat(router, &stat.HandlerStatDep{ServiceStat: serviceStat, ManagerMiddleware: managerMiddleware})
 	article_user.NewHandlerArticleUser(router, &article_user.HandlerArticleUserDep{ServiceArticleUser: serviceArticleUser, ManagerMiddleware: managerMiddleware})
 	server := http.Server{
 		Addr:    ":8080",

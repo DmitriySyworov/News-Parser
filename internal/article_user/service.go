@@ -5,6 +5,7 @@ import (
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
 	"app/news-parser/internal/model"
+	"app/news-parser/pkg/event_bus"
 	"net/http"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ type ServiceArticleUser struct {
 }
 type ServiceArticleUserDep struct {
 	di.IRepoUser
+	*event_bus.EventBus
 }
 
 func NewServiceArticleUser(repo *RepositoryArticleUser, dep *ServiceArticleUserDep) *ServiceArticleUser {
@@ -24,9 +26,9 @@ func NewServiceArticleUser(repo *RepositoryArticleUser, dep *ServiceArticleUserD
 		Dep:  dep,
 	}
 }
-func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, uuid, addTextStr string) ([]ResponseCreateUserArticle, []custom_errors.Error) {
+func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, userUUID, addTextStr string) ([]ResponseCreateUserArticle, []custom_errors.Error) {
 	var sliceError []custom_errors.Error
-	if !s.Dep.IRepoUser.IsUserExistByUUID(uuid) {
+	if !s.Dep.IRepoUser.IsUserExistByUUID(userUUID) {
 		sliceError = append(sliceError, custom_errors.Error{
 			Message: custom_errors.ErrUserNotExist.Error(),
 			Status:  http.StatusNotFound,
@@ -48,17 +50,20 @@ func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, uuid
 	}
 	var sliceUserArticle []ResponseCreateUserArticle
 	customParsing := NewCustomParsing(s.Repo)
+	counterArticle := 0
 	if isAddText {
-		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
+		go customParsing.customParseCategory(body.URL, body.Category, userUUID, isAddText)
 		go customParsing.CustomParseArticle()
-		go customParsing.createUserArticles() //!!
-		//for customLink := range customParsing.ArticleUserCh {
-		//	sliceUserArticle = append(sliceUserArticle, customLink)
-		//}
+		go customParsing.createUserArticles(true)
+		for customLink := range customParsing.RespUserCh {
+			counterArticle++
+			sliceUserArticle = append(sliceUserArticle, customLink)
+		}
 	} else {
-		go customParsing.customParseCategory(body.URL, body.Category, uuid, isAddText)
-		go customParsing.createUserArticles()
+		go customParsing.customParseCategory(body.URL, body.Category, userUUID, isAddText)
+		go customParsing.createUserArticles(false)
 		for customArticle := range customParsing.RespUserCh {
+			counterArticle++
 			sliceUserArticle = append(sliceUserArticle, customArticle)
 		}
 	}
@@ -69,6 +74,14 @@ func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, uuid
 		})
 		return nil, sliceError
 	}
+	event := event_bus.Event{
+		Name: common.EventCreateUserArticle,
+		Data: common.StatDataUserArticle{
+			UserUUID: userUUID,
+			Number:   counterArticle,
+		},
+	}
+	go s.Dep.EventBus.Publisher(&event)
 	return sliceUserArticle, nil
 }
 func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, addTextStr, deleteTextStr string) (*model.UserArticle, []custom_errors.Error) {
@@ -110,6 +123,12 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			return nil, sliceError
 		}
 	}
+	event := event_bus.Event{
+		Name: common.EventUpdateUserArticle,
+		Data: common.StatDataUserArticle{
+			UserUUID: userUUID,
+			Number:   1,
+		}}
 	if category != "" && !addText && !deleteText {
 		resUserArticle, errUpdateCategory := s.Repo.UpdateOneColumnUserArticle(userUUID, articleUUID, "category", category)
 		if errUpdateCategory != nil {
@@ -119,6 +138,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			})
 			return nil, sliceError
 		}
+		go s.Dep.EventBus.Publisher(&event)
 		return resUserArticle, nil
 	} else if category == "" && !addText && deleteText {
 		resUserArticle, errUpdateCategory := s.Repo.UpdateOneColumnUserArticle(userUUID, articleUUID, "text", "-")
@@ -129,6 +149,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			})
 			return nil, sliceError
 		}
+		go s.Dep.EventBus.Publisher(&event)
 		return resUserArticle, nil
 	} else if category == "" && addText && !deleteText {
 		resUserArticle, errUpdateCategory := s.Repo.UpdateOneColumnUserArticle(userUUID, articleUUID, "text", text)
@@ -139,6 +160,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			})
 			return nil, sliceError
 		}
+		go s.Dep.EventBus.Publisher(&event)
 		return resUserArticle, nil
 	} else if category != "" && !addText && deleteText {
 		resUserArticle := model.UserArticle{
@@ -157,6 +179,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			})
 			return nil, sliceError
 		}
+		go s.Dep.EventBus.Publisher(&event)
 		return &resUserArticle, nil
 	} else if category != "" && addText && !deleteText {
 		resUserArticle := model.UserArticle{
@@ -175,6 +198,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 			})
 			return nil, sliceError
 		}
+		go s.Dep.EventBus.Publisher(&event)
 		return &resUserArticle, nil
 	} else {
 		return nil, []custom_errors.Error{
@@ -201,7 +225,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 			})
 			return nil, sliceError
 		}
-		sliceUpdateArticles, errUpdateBatch := s.Repo.UpdateOneColumnByDomainAll(userUUID, domain, "category", category)
+		sliceUpdateArticles, countUpdate, errUpdateBatch := s.Repo.UpdateCategoryByDomainAll(userUUID, domain, category)
 		if errUpdateBatch != nil {
 			sliceError = append(sliceError, custom_errors.Error{
 				Message: ErrNotFoundUserArticle.Error(),
@@ -219,6 +243,14 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 				},
 			})
 		}
+		event := event_bus.Event{
+			Name: common.EventUpdateUserArticle,
+			Data: common.StatDataUserArticle{
+				UserUUID: userUUID,
+				Number:   int(countUpdate),
+			},
+		}
+		go s.Dep.EventBus.Publisher(&event)
 		return respUserArticles, nil
 	} else if addText && !deleteText {
 		sliceUserArticles, errGetUserArticlesByDomain := s.Repo.GetUserArticlesByDomain(userUUID, domain, false)
@@ -229,6 +261,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 			})
 			return nil, sliceError
 		}
+		countUpdate := 0
 		var wg sync.WaitGroup
 		wg.Add(len(sliceUserArticles))
 		for _, article := range sliceUserArticles {
@@ -265,6 +298,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 					})
 					return
 				}
+				countUpdate++
 				respUserArticles = append(respUserArticles, ResponseUserArticle{
 					Article: article,
 					SuccessOperation: SuccessOfTheOperation{
@@ -276,6 +310,14 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 			}()
 		}
 		wg.Wait()
+		event := event_bus.Event{
+			Name: common.EventUpdateUserArticle,
+			Data: common.StatDataUserArticle{
+				UserUUID: userUUID,
+				Number:   countUpdate,
+			},
+		}
+		go s.Dep.EventBus.Publisher(&event)
 		return respUserArticles, nil
 	} else if !addText && deleteText {
 		sliceUserArticles, errGetUserArticlesByDomain := s.Repo.GetUserArticlesByDomain(userUUID, domain, true)
@@ -286,6 +328,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 			})
 			return nil, sliceError
 		}
+		countUpdate := 0
 		for _, article := range sliceUserArticles {
 			oldCategory := article.Category
 			oldText := article.Text
@@ -306,6 +349,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 					},
 				})
 			}
+			countUpdate++
 			respUserArticles = append(respUserArticles, ResponseUserArticle{
 				Article: article,
 				SuccessOperation: SuccessOfTheOperation{
@@ -315,9 +359,22 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 				},
 			})
 		}
+		event := event_bus.Event{
+			Name: common.EventUpdateUserArticle,
+			Data: common.StatDataUserArticle{
+				UserUUID: userUUID,
+				Number:   countUpdate,
+			},
+		}
+		go s.Dep.EventBus.Publisher(&event)
 		return respUserArticles, nil
+	} else {
+		return nil, []custom_errors.Error{
+			{
+				Message: ErrIncorrectParams.Error(),
+				Status:  http.StatusBadRequest,
+			}}
 	}
-	return nil, nil
 }
 func (s *ServiceArticleUser) helperValidateUserAndAddTextAndDeleteText(userUUID, addTextStr, deleteTextStr string) (bool, bool, []custom_errors.Error) {
 	var sliceError []custom_errors.Error
@@ -404,6 +461,14 @@ func (s *ServiceArticleUser) RemoveUserArticle(articleUUID, userUUID, typeRemove
 			})
 			return sliceError
 		}
+		event := event_bus.Event{
+			Name: common.EventSoftDeleteUserArticle,
+			Data: common.StatDataUserArticle{
+				UserUUID: userUUID,
+				Number:   1,
+			},
+		}
+		go s.Dep.Publisher(&event)
 	case typeHardDelete:
 		if errDelete := s.Repo.DeleteUserArticleByUUID(userUUID, articleUUID); errDelete != nil {
 			sliceError = append(sliceError, custom_errors.Error{
@@ -412,6 +477,14 @@ func (s *ServiceArticleUser) RemoveUserArticle(articleUUID, userUUID, typeRemove
 			})
 			return sliceError
 		}
+		event := event_bus.Event{
+			Name: common.EventHardDeleteUserArticle,
+			Data: common.StatDataUserArticle{
+				UserUUID: userUUID,
+				Number:   1,
+			},
+		}
+		go s.Dep.Publisher(&event)
 	}
 	return nil
 }
@@ -445,13 +518,22 @@ func (s *ServiceArticleUser) RemoveAllUserArticle(userUUID, typeRemove string) [
 			})
 			return sliceError
 		}
-		if errRemoveAll := s.Repo.RemoveAllUserArticle(userUUID); errRemoveAll != nil {
+		countRemove, errRemoveAll := s.Repo.RemoveAllUserArticle(userUUID)
+		if errRemoveAll != nil {
 			sliceError = append(sliceError, custom_errors.Error{
 				Message: ErrFailedRemoveArticle.Error(),
 				Status:  http.StatusInternalServerError,
 			})
 			return sliceError
 		}
+		event := event_bus.Event{
+			Name: common.EventSoftDeleteUserArticle,
+			Data: common.StatDataUserArticle{
+				UserUUID: userUUID,
+				Number:   countRemove,
+			},
+		}
+		go s.Dep.Publisher(&event)
 	case typeHardDelete:
 		if !s.Repo.IsUserArticleExistAll(userUUID) {
 			sliceError = append(sliceError, custom_errors.Error{
@@ -460,13 +542,22 @@ func (s *ServiceArticleUser) RemoveAllUserArticle(userUUID, typeRemove string) [
 			})
 			return sliceError
 		}
-		if errDeleteAll := s.Repo.DeleteAllUserArticle(userUUID); errDeleteAll != nil {
+		countDelete, errDeleteAll := s.Repo.DeleteAllUserArticle(userUUID)
+		if errDeleteAll != nil {
 			sliceError = append(sliceError, custom_errors.Error{
 				Message: ErrFailedRemoveArticle.Error(),
 				Status:  http.StatusInternalServerError,
 			})
 			return sliceError
 		}
+		event := event_bus.Event{
+			Name: common.EventHardDeleteUserArticle,
+			Data: common.StatDataUserArticle{
+				UserUUID: userUUID,
+				Number:   countDelete,
+			},
+		}
+		go s.Dep.Publisher(&event)
 	}
 	return nil
 }
@@ -595,6 +686,14 @@ func (s *ServiceArticleUser) RecoveryUserArticle(userUUID, articleUUId string) (
 		})
 		return nil, sliceError
 	}
+	event := event_bus.Event{
+		Name: common.EventRecoveryUserArticle,
+		Data: common.StatDataUserArticle{
+			UserUUID: userUUID,
+			Number:   1,
+		},
+	}
+	go s.Dep.Publisher(&event)
 	return userArticle, nil
 }
 func (s *ServiceArticleUser) RecoveryAllUserArticle(userUUID string) (*ResponseSliceUserArticles, []custom_errors.Error) {
@@ -614,7 +713,7 @@ func (s *ServiceArticleUser) RecoveryAllUserArticle(userUUID string) (*ResponseS
 	if len(sliceError) != 0 {
 		return nil, sliceError
 	}
-	sliceUserArticles, errRecoveryUserArticles := s.Repo.RecoveryAllUserArticle(userUUID)
+	sliceUserArticles, countRecovery, errRecoveryUserArticles := s.Repo.RecoveryAllUserArticle(userUUID)
 	if errRecoveryUserArticles != nil {
 		sliceError = append(sliceError, custom_errors.Error{
 			Message: ErrFailedRecoveryArticle.Error(),
@@ -622,6 +721,14 @@ func (s *ServiceArticleUser) RecoveryAllUserArticle(userUUID string) (*ResponseS
 		})
 		return nil, sliceError
 	}
+	event := event_bus.Event{
+		Name: common.EventRecoveryUserArticle,
+		Data: common.StatDataUserArticle{
+			UserUUID: userUUID,
+			Number:   countRecovery,
+		},
+	}
+	go s.Dep.Publisher(&event)
 	return &ResponseSliceUserArticles{
 		SliceUserArticles: sliceUserArticles,
 	}, nil

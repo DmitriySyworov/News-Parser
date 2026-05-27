@@ -4,7 +4,7 @@ import (
 	"app/news-parser/configs"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/pkg/send_letter"
-	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,8 +17,13 @@ type ResponseSuccessful struct {
 }
 
 const (
-	EventClickCategory = "click_category"
-	EventClickArticle  = "click_article"
+	EventClickCategory         = "click_category"
+	EventClickArticle          = "click_article"
+	EventCreateUserArticle     = "create_article"
+	EventUpdateUserArticle     = "update_article"
+	EventSoftDeleteUserArticle = "soft_delete_article"
+	EventHardDeleteUserArticle = "hard_delete_article"
+	EventRecoveryUserArticle   = "recovery_article"
 
 	OffsetDefault = 0
 	LimitDefault  = 50
@@ -35,21 +40,44 @@ const (
 	MessageEmail   = "we sent a letter to the specified email: "
 )
 
+type StatDataUserArticle struct {
+	UserUUID string
+	Number   int
+}
+
 func DateNow() time.Time {
-	now := time.Now()
-	if now.Month() < 10 && now.Day() < 10 {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-0%d-0%d", now.Year(), now.Month(), now.Day()))
-		return date
-	} else if now.Day() < 10 {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-%d-0%d", now.Year(), now.Month(), now.Day()))
-		return date
-	} else if now.Month() < 10 {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-0%d-%d", now.Year(), now.Month(), now.Day()))
-		return date
-	} else {
-		date, _ := time.Parse(time.DateOnly, fmt.Sprintf("%d-%d-%d", now.Year(), now.Month(), now.Day()))
-		return date
+	now := time.Now().Format(time.DateOnly)
+	date, _ := time.Parse(time.DateOnly, now)
+	return date
+}
+func SendRequest(url string) (*http.Response, error) {
+	poolUserAgents := []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
+		"Mozilla/5.0 (X11; Linux x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 OPR/108.0.0.0",
+		"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/605.1.15",
+		"Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/24.0 Chrome/115.0.0.0 Mobile Safari/537.36",
 	}
+	request, errReq := http.NewRequest(http.MethodGet, url, nil)
+	if errReq != nil {
+		return nil, errReq
+	}
+	randomIndex := rand.IntN(len(poolUserAgents))
+	request.Header.Set("User-Agent", poolUserAgents[randomIndex])
+	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+	request.Header.Set("Accept-Language", "ru,en;q=0.9,en-US;q=0.8")
+	request.Header.Set("Connection", "keep-alive")
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+	response, errResp := client.Do(request)
+	if errResp != nil {
+		return nil, errResp
+	}
+	return response, nil
 }
 func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []custom_errors.Error) {
 	var sliceError []custom_errors.Error

@@ -3,6 +3,7 @@ package article_user
 import "errors"
 
 var (
+	ErrParseInitialization         = errors.New("parser initialization error")
 	ErrDeleteText                  = errors.New("no text anymore")
 	ErrAddText                     = errors.New("text has already been added")
 	ErrFailedToParse               = errors.New("failed to parse your link")

@@ -35,7 +35,7 @@ func NewCustomParsing(repo *RepositoryArticleUser) *CustomParse {
 }
 func (cp *CustomParse) customParseCategory(url, category, UserUUID string, isText bool) {
 	defer cp.recoveryCustomGoroutine()
-	response, errResp := http.Get(url)
+	response, errResp := common.SendRequest(url)
 	if errResp != nil {
 		cp.RespUserCh <- ResponseCreateUserArticle{SuccessOperation: SuccessOfTheOperation{
 			Success: false,
@@ -81,6 +81,7 @@ func (cp *CustomParse) customParseCategory(url, category, UserUUID string, isTex
 			}
 		}
 	})
+	close(cp.ArticleUserCh)
 	if !isText {
 		close(cp.DBUserCh)
 	}
@@ -104,7 +105,11 @@ func getDomain(url string) string {
 func (cp *CustomParse) CustomParseArticle() {
 	path, errLaunch := launcher.New().Headless(true).Launch()
 	if errLaunch != nil {
-		//cp.RespUserCh <- model.UserArticle{Error: errLaunch.Error()}
+		cp.RespUserCh <- ResponseCreateUserArticle{SuccessOperation: SuccessOfTheOperation{
+			Success: false,
+			Message: ErrParseInitialization.Error(),
+			Status:  http.StatusInternalServerError,
+		}}
 		return
 	}
 	browser := rod.New().ControlURL(path).MustConnect()
@@ -116,21 +121,23 @@ func (cp *CustomParse) CustomParseArticle() {
 	}()
 	for art := range cp.ArticleUserCh {
 		go func() {
+			defer cp.recoveryCustomGoroutine()
 			page := browser.MustPage(art.URL)
 			page.Timeout(10 * time.Second).MustWaitLoad()
 			text, errElement := page.MustElement("body").Text()
+			if errClose := page.Close(); errClose != nil {
+				log.Println(errClose)
+			}
 			if errElement != nil {
-				log.Println("error parse page")
 				art.Text = "-"
 				cp.IsOkTextCh <- true
 			}
 			art.Text = text
 			cp.IsOkTextCh <- true
 		}()
-		ticker := time.NewTicker(20 * time.Second)
+		ticker := time.NewTicker(10 * time.Second)
 		select {
 		case <-ticker.C:
-			log.Println("time for write down text expired") //!!
 			art.Text = "-"
 			cp.DBUserCh <- art
 		case ok := <-cp.IsOkTextCh:
@@ -141,7 +148,7 @@ func (cp *CustomParse) CustomParseArticle() {
 	}
 	close(cp.DBUserCh)
 }
-func (cp *CustomParse) createUserArticles() {
+func (cp *CustomParse) createUserArticles(flagWithText bool) {
 	for userArticle := range cp.DBUserCh {
 		errCreate := cp.Repo.CreateUserNewArticle(&userArticle)
 		if errCreate != nil {
@@ -152,18 +159,33 @@ func (cp *CustomParse) createUserArticles() {
 			}}
 			return
 		}
-		cp.RespUserCh <- ResponseCreateUserArticle{
-			Header:      userArticle.Header,
-			URL:         userArticle.URL,
-			Text:        userArticle.Text,
-			Category:    userArticle.Category,
-			ArticleUUID: userArticle.ArticleUUID,
-			UserUUID:    userArticle.UserUUID,
-			SuccessOperation: SuccessOfTheOperation{
-				Success: true,
-				Message: "Created",
-				Status:  http.StatusCreated,
-			}}
+		if len(userArticle.Text) < 2 && flagWithText {
+			cp.RespUserCh <- ResponseCreateUserArticle{
+				Header:      userArticle.Header,
+				URL:         userArticle.URL,
+				Text:        userArticle.Text,
+				Category:    userArticle.Category,
+				ArticleUUID: userArticle.ArticleUUID,
+				UserUUID:    userArticle.UserUUID,
+				SuccessOperation: SuccessOfTheOperation{
+					Success: true,
+					Message: "Created without text. failed to extract page body",
+					Status:  http.StatusOK,
+				}}
+		} else {
+			cp.RespUserCh <- ResponseCreateUserArticle{
+				Header:      userArticle.Header,
+				URL:         userArticle.URL,
+				Text:        userArticle.Text,
+				Category:    userArticle.Category,
+				ArticleUUID: userArticle.ArticleUUID,
+				UserUUID:    userArticle.UserUUID,
+				SuccessOperation: SuccessOfTheOperation{
+					Success: true,
+					Message: "Created",
+					Status:  http.StatusCreated,
+				}}
+		}
 	}
 	close(cp.RespUserCh)
 }
