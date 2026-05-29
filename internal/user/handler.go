@@ -3,25 +3,30 @@ package user
 import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/handler_request"
+	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/middleware"
-	"app/news-parser/pkg/handler_request"
-	"app/news-parser/pkg/handler_response"
+	"app/news-parser/internal/response"
+	"log/slog"
 	"net/http"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type HandlerUser struct {
-	custom_errors.ResponseError
-	common.ResponseSuccessful
-	*HandlerUserDep
+	response.Response[any]
+	Dep *HandlerUserDep
+	*ServiceUser
 }
 type HandlerUserDep struct {
-	*ServiceUser
+	*loggers.Logger
 	*middleware.ManagerMiddleware
 }
 
-func NewHandlerUser(router *http.ServeMux, dep *HandlerUserDep) {
+func NewHandlerUser(router *http.ServeMux, service *ServiceUser, dep *HandlerUserDep) {
 	user := &HandlerUser{
-		HandlerUserDep: dep,
+		ServiceUser: service,
+		Dep:         dep,
 	}
 	router.Handle("GET /my/user/get", dep.IsAuthJWT(user.GetMyUser()))
 	router.Handle("PATCH /my/user/update", dep.IsAuthJWT(user.UpdateMyUser()))
@@ -31,194 +36,275 @@ func NewHandlerUser(router *http.ServeMux, dep *HandlerUserDep) {
 func (h *HandlerUser) GetMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
-		ctxValue := request.Context().Value(middleware.KeyContext)
-		ctxTokens, ok := ctxValue.(middleware.ContextToken)
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
 		if !ok {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
+		values.DataLog.UserUUID = values.UserUUID
+		if len(values.UserUUID) != 36 {
+			err := response.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
 				Status:  http.StatusUnauthorized,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
+			response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			return
 		}
-		myUser, errGetMyUser := h.ServiceUser.Repo.GetMyUser(ctxTokens.UUID)
+		myUser, errGetMyUser := h.ServiceUser.Repo.GetMyUser(values.UserUUID)
 		if errGetMyUser != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			err := response.Error{
 				Message: custom_errors.ErrUserNotExist.Error(),
 				Status:  http.StatusNotFound,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusNotFound)
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
+			response.HandlerResponse(writer, h.Response, http.StatusNotFound)
 			return
 		}
-		h.ResponseSuccessful.Success = true
-		h.ResponseSuccessful.Data = myUser
-		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
+		h.Response.Success = true
+		h.Response.Data = myUser
+		response.HandlerResponse(writer, h.Response, http.StatusOK)
 	}
 }
 func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
-		ctxValue := request.Context().Value(middleware.KeyContext)
-		ctxTokens, ok := ctxValue.(middleware.ContextToken)
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
 		if !ok {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
+		values.DataLog.UserUUID = values.UserUUID
+		if len(values.UserUUID) != 36 {
+			err := response.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
 				Status:  http.StatusUnauthorized,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
+			response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			return
 		}
 		body, errRequest := handler_request.HandlerRequest[RequestRemoveOrDelete](request)
 		if errRequest != nil {
-			switch errRequest {
-			case handler_request.ErrIncorrectFormat:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			if errValid, isValidErr := errRequest.(validator.ValidationErrors); isValidErr {
+				for _, errList := range errValid {
+					if errList.Field() == "Password" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectPassword.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					}
+				}
+			} else {
+				err := response.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
-				})
-			case handler_request.ErrInvalidData:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-					Message: errRequest.Error(),
-					Status:  http.StatusUnprocessableEntity,
-				})
+				}
+				values.DataLog.Errors = append(values.DataLog.Errors, err)
+				h.Response.Errors = append(h.Response.Errors, err)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			return
 		}
 		typeRemove := request.URL.Query().Get("type")
+		values.DataLog.MapLog["type_remove"] = typeRemove
 		if typeRemove != actionRemove && typeRemove != actionDelete {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			h.Response.Errors = append(h.Response.Errors, response.Error{
 				Message: ErrIncorrectType.Error(),
 				Status:  http.StatusBadRequest,
 			})
 		}
-		respAuth, errRemove := h.ServiceUser.RemoveMyUser(ctxTokens.UUID, body.Password, typeRemove)
+		respAuth, errRemove := h.ServiceUser.RemoveMyUser(values.UserUUID, body.Password, typeRemove)
 		if errRemove != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, *errRemove)
-			if len(h.ResponseError.Errors) != 0 {
-				if len(h.ResponseError.Errors) == 1 {
-					handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
+			h.Response.Errors = append(h.Response.Errors, *errRemove)
+			if len(h.Response.Errors) != 0 {
+				values.DataLog.Errors = append(values.DataLog.Errors, *errRemove)
+				if len(h.Response.Errors) == 1 {
+					response.HandlerResponse(writer, h.Response, h.Response.Errors[0].Status)
 				} else {
-					handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+					response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 				}
 			}
 			return
 		}
-		h.ResponseSuccessful.Success = true
-		h.ResponseSuccessful.Data = respAuth
-		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
+		h.Response.Success = true
+		h.Response.Data = respAuth
+		response.HandlerResponse(writer, h.Response, http.StatusOK)
 	}
 }
 func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
-		ctxValue := request.Context().Value(middleware.KeyContext)
-		ctxTokens, ok := ctxValue.(middleware.ContextToken)
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
 		if !ok {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
+		values.DataLog.UserUUID = values.UserUUID
+		if len(values.UserUUID) != 36 {
+			err := response.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
 				Status:  http.StatusUnauthorized,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
+			response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			return
 		}
 		body, errRequest := handler_request.HandlerRequest[RequestUpdateUser](request)
 		if errRequest != nil {
-			switch errRequest {
-			case handler_request.ErrIncorrectFormat:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			if errValid, isValidErr := errRequest.(validator.ValidationErrors); isValidErr {
+				for _, errList := range errValid {
+					if errList.Field() == "Password" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectPassword.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					} else if errList.Field() == "NewPassword" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectNewPassword.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					} else if errList.Field() == "Name" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectName.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					} else if errList.Field() == "NewEmail" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectEmail.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					}
+				}
+			} else {
+				err := response.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
-				})
-			case handler_request.ErrInvalidData:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-					Message: errRequest.Error(),
-					Status:  http.StatusUnprocessableEntity,
-				})
+				}
+				values.DataLog.Errors = append(values.DataLog.Errors, err)
+				h.Response.Errors = append(h.Response.Errors, err)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			return
 		}
-		updateUser, respAuth, errUpdate := h.ServiceUser.UpdateMyUser(body, ctxTokens.UUID)
+		updateUser, respAuth, errUpdate := h.ServiceUser.UpdateMyUser(body, values.UserUUID)
 		if errUpdate != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, *errUpdate)
-			if len(h.ResponseError.Errors) != 0 {
-				if len(h.ResponseError.Errors) == 1 {
-					handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
+			values.DataLog.Errors = append(values.DataLog.Errors, *errUpdate)
+			h.Response.Errors = append(h.Response.Errors, *errUpdate)
+			if len(h.Response.Errors) != 0 {
+				if len(h.Response.Errors) == 1 {
+					response.HandlerResponse(writer, h.Response, h.Response.Errors[0].Status)
 				} else {
-					handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+					response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 				}
 				return
 			}
 		}
-		h.ResponseSuccessful.Success = true
+		h.Response.Success = true
 		if respAuth != nil {
-			h.ResponseSuccessful.Data = respAuth
+			h.Response.Data = respAuth
 		} else {
-			h.ResponseSuccessful.Data = updateUser
+			h.Response.Data = updateUser
 		}
-		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
+		response.HandlerResponse(writer, h.Response, http.StatusOK)
 	}
 }
 func (h *HandlerUser) ConfirmMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
-		ctxValue := request.Context().Value(middleware.KeyContext)
-		ctxTokens, ok := ctxValue.(middleware.ContextToken)
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
 		if !ok {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
+		values.DataLog.UserUUID = values.UserUUID
+		if len(values.UserUUID) != 36 {
+			err := response.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
 				Status:  http.StatusUnauthorized,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
+			response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			return
 		}
 		body, errRequest := handler_request.HandlerRequest[common.RequestConfirm](request)
 		if errRequest != nil {
-			switch errRequest {
-			case handler_request.ErrIncorrectFormat:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			if errValid, isValidErr := errRequest.(validator.ValidationErrors); isValidErr {
+				for _, errList := range errValid {
+					if errList.Field() == "Code" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectCode.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					}
+				}
+			} else {
+				err := response.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
-				})
-			case handler_request.ErrInvalidData:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-					Message: errRequest.Error(),
-					Status:  http.StatusUnprocessableEntity,
-				})
+				}
+				values.DataLog.Errors = append(values.DataLog.Errors, err)
+				h.Response.Errors = append(h.Response.Errors, err)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			return
 		}
 		action := request.URL.Query().Get("action")
+		values.DataLog.MapLog["action"] = action
 		if action != actionRemove && action != actionUpdate && action != actionDelete {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			h.Response.Errors = append(h.Response.Errors, response.Error{
 				Message: ErrIncorrectAction.Error(),
 				Status:  http.StatusBadRequest,
 			})
 		}
-		respConfirm, errConfirm := h.ServiceUser.ConfirmMyUser(ctxTokens.UUID, ctxTokens.SessionID, action, body.Code)
+		respConfirm, errConfirm := h.ServiceUser.ConfirmMyUser(values.UserUUID, values.SessionID, action, body.Code)
 		if errConfirm != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, *errConfirm)
-			if len(h.ResponseError.Errors) != 0 {
-				if len(h.ResponseError.Errors) == 1 {
-					handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
+			h.Response.Errors = append(h.Response.Errors, *errConfirm)
+			if len(h.Response.Errors) != 0 {
+				values.DataLog.Errors = append(values.DataLog.Errors, *errConfirm)
+				if len(h.Response.Errors) == 1 {
+					response.HandlerResponse(writer, h.Response, h.Response.Errors[0].Status)
 				} else {
-					handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+					response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 				}
 				return
 			}
 		}
 		if action == actionUpdate {
-			h.ResponseSuccessful.Success = true
-			h.ResponseSuccessful.Data = respConfirm
-			handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
+			h.Response.Success = true
+			h.Response.Data = respConfirm
+			response.HandlerResponse(writer, h.Response, http.StatusOK)
 		} else {
 			writer.WriteHeader(http.StatusNoContent)
 		}

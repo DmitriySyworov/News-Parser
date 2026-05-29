@@ -1,0 +1,8 @@
+*.env
+*.idea/
+*data
+*.gitignore
+.git
+.env.example
+*.md
+

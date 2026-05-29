@@ -3,25 +3,30 @@ package auth
 import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/handler_request"
+	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/middleware"
-	"app/news-parser/pkg/handler_request"
-	"app/news-parser/pkg/handler_response"
+	"app/news-parser/internal/response"
+	"log/slog"
 	"net/http"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type HandlerAuth struct {
-	custom_errors.ResponseError
-	common.ResponseSuccessful
+	response.Response[any]
 	Dep *HandlerAuthDep
+	*ServiceAuth
 }
 type HandlerAuthDep struct {
-	*ServiceAuth
 	*middleware.ManagerMiddleware
+	*loggers.Logger
 }
 
-func NewHandlerAuth(router *http.ServeMux, dep *HandlerAuthDep) {
+func NewHandlerAuth(router *http.ServeMux, service *ServiceAuth, dep *HandlerAuthDep) {
 	auth := &HandlerAuth{
-		Dep: dep,
+		ServiceAuth: service,
+		Dep:         dep,
 	}
 	router.HandleFunc("POST /auth/register", auth.Register())
 	router.HandleFunc("POST /auth/login", auth.Login())
@@ -31,187 +36,272 @@ func NewHandlerAuth(router *http.ServeMux, dep *HandlerAuthDep) {
 func (h *HandlerAuth) Register() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
 		body, errRequest := handler_request.HandlerRequest[RequestRegister](request)
 		if errRequest != nil {
-			switch errRequest {
-			case handler_request.ErrIncorrectFormat:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			if errValid, isValidErr := errRequest.(validator.ValidationErrors); isValidErr {
+				for _, errList := range errValid {
+					if errList.Field() == "Password" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectPassword.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					} else if errList.Field() == "Name" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectName.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					} else if errList.Field() == "Email" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectEmail.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					}
+				}
+			} else {
+				err := response.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
-			case handler_request.ErrInvalidData:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-					Message: errRequest.Error(),
-					Status:  http.StatusUnprocessableEntity,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnprocessableEntity)
+				}
+				values.DataLog.Errors = append(values.DataLog.Errors, err)
+				h.Response.Errors = append(h.Response.Errors, err)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
 			return
 		}
-		respAuth, errAuth := h.Dep.Register(body)
+		respAuth, errAuth := h.ServiceAuth.Register(body)
 		if errAuth != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
+			values.DataLog.Errors = append(values.DataLog.Errors, *errAuth)
+			h.Response.Errors = append(h.Response.Errors, *errAuth)
 			switch errAuth.Message {
 			case custom_errors.ErrFailedSecurity.Error():
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
+				response.HandlerResponse(writer, h.Response, http.StatusInternalServerError)
 			default:
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
+				response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			}
 			return
 		}
-		h.ResponseSuccessful.Success = true
-		h.ResponseSuccessful.Data = respAuth
-		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
+		h.Response.Success = true
+		h.Response.Data = respAuth
+		response.HandlerResponse(writer, h.Response, http.StatusOK)
 	}
 }
 func (h *HandlerAuth) Login() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
 		body, errRequest := handler_request.HandlerRequest[RequestLogin](request)
 		if errRequest != nil {
-			switch errRequest {
-			case handler_request.ErrIncorrectFormat:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			if errValid, isValidErr := errRequest.(validator.ValidationErrors); isValidErr {
+				for _, errList := range errValid {
+					if errList.Field() == "Password" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectPassword.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					} else if errList.Field() == "Email" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectEmail.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					}
+				}
+			} else {
+				err := response.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
-			case handler_request.ErrInvalidData:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-					Message: errRequest.Error(),
-					Status:  http.StatusUnprocessableEntity,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnprocessableEntity)
+				}
+				values.DataLog.Errors = append(values.DataLog.Errors, err)
+				h.Response.Errors = append(h.Response.Errors, err)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
 			return
 		}
-		respAuth, errAuth := h.Dep.Login(body)
+		respAuth, errAuth := h.ServiceAuth.Login(body)
 		if errAuth != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
+			values.DataLog.Errors = append(values.DataLog.Errors, *errAuth)
+			h.Response.Errors = append(h.Response.Errors, *errAuth)
 			switch errAuth.Message {
 			case custom_errors.ErrFailedSecurity.Error():
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
+				response.HandlerResponse(writer, h.Response, http.StatusInternalServerError)
 			default:
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
+				response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			}
 			return
 		}
-		h.ResponseSuccessful.Success = true
-		h.ResponseSuccessful.Data = respAuth
-		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
+		h.Response.Success = true
+		h.Response.Data = respAuth
+		response.HandlerResponse(writer, h.Response, http.StatusOK)
 	}
 }
 func (h *HandlerAuth) Recovery() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
 		action := request.URL.Query().Get("action")
+		values.DataLog.MapLog["action"] = action
 		if action != actionRecoveryPassword && action != actionRecoveryRemove {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			h.Response.Errors = append(h.Response.Errors, response.Error{
 				Message: ErrIncorrectActionRecovery.Error(),
 				Status:  http.StatusBadRequest,
 			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
 		}
 		body, errRequest := handler_request.HandlerRequest[RequestRecovery](request)
 		if errRequest != nil {
-			switch errRequest {
-			case handler_request.ErrIncorrectFormat:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			if errValid, isValidErr := errRequest.(validator.ValidationErrors); isValidErr {
+				for _, errList := range errValid {
+					if errList.Field() == "NewPassword" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectNewPassword.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					} else if errList.Field() == "Email" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectEmail.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					}
+				}
+			} else {
+				err := response.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
-			case handler_request.ErrInvalidData:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-					Message: errRequest.Error(),
-					Status:  http.StatusUnprocessableEntity,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnprocessableEntity)
+				}
+				values.DataLog.Errors = append(values.DataLog.Errors, err)
+				h.Response.Errors = append(h.Response.Errors, err)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
 			return
 		}
-		respAuth, errAuth := h.Dep.ServiceAuth.Recovery(body.Email, body.NewPassword, action)
+		respAuth, errAuth := h.ServiceAuth.Recovery(body.Email, body.NewPassword, action)
 		if errAuth != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, *errAuth)
+			values.DataLog.Errors = append(values.DataLog.Errors, *errAuth)
+			h.Response.Errors = append(h.Response.Errors, *errAuth)
 			switch errAuth.Message {
 			case custom_errors.ErrFailedSecurity.Error():
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusInternalServerError)
+				response.HandlerResponse(writer, h.Response, http.StatusInternalServerError)
 			default:
-				handler_response.HandlerResponse(writer, h.ResponseError, errAuth.Status)
+				response.HandlerResponse(writer, h.Response, errAuth.Status)
 			}
 			return
 		}
-		h.ResponseSuccessful.Success = true
-		h.ResponseSuccessful.Data = respAuth
-		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusOK)
+		h.Response.Success = true
+		h.Response.Data = respAuth
+		response.HandlerResponse(writer, h.Response, http.StatusOK)
 	}
 }
 func (h *HandlerAuth) Confirm() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.ResponseError = custom_errors.ResponseError{}
-			h.ResponseSuccessful = common.ResponseSuccessful{}
+			h.Response = response.Response[any]{}
 		}()
-		action := request.URL.Query().Get("action")
-		if action != actionRegister && action != actionRecoveryRemove && action != actionRecoveryPassword {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-				Message: ErrIncorrectActionConfirm.Error(),
-				Status:  http.StatusBadRequest,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
+		values.DataLog.MapLog["session_id"] = values.SessionID
+		if len(values.SessionID) != common.LengthSession {
+			err := response.Error{
+				Message: custom_errors.ErrSession.Error(),
+				Status:  http.StatusUnauthorized,
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
+			response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			return
 		}
-		valueCtx := request.Context().Value(middleware.KeyContext)
-		ctxTokens, ok := valueCtx.(middleware.ContextToken)
-		if !ok {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-				Message: custom_errors.ErrIncorrectToken.Error(),
-				Status:  http.StatusUnauthorized,
-			})
-			handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnauthorized)
+		action := request.URL.Query().Get("action")
+		values.DataLog.MapLog["action"] = action
+		if action != actionRegister && action != actionRecoveryRemove && action != actionRecoveryPassword {
+			err := response.Error{
+				Message: ErrIncorrectActionConfirm.Error(),
+				Status:  http.StatusBadRequest,
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
+			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
 		}
 		body, errRequest := handler_request.HandlerRequest[common.RequestConfirm](request)
 		if errRequest != nil {
-			switch errRequest {
-			case handler_request.ErrIncorrectFormat:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
+			if errValid, isValidErr := errRequest.(validator.ValidationErrors); isValidErr {
+				for _, errList := range errValid {
+					if errList.Field() == "Code" {
+						err := response.Error{
+							Message: custom_errors.ErrIncorrectCode.Error(),
+							Status:  http.StatusBadRequest,
+						}
+						values.DataLog.Errors = append(values.DataLog.Errors, err)
+						h.Response.Errors = append(h.Response.Errors, err)
+						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
+					}
+				}
+			} else {
+				err := response.Error{
 					Message: errRequest.Error(),
 					Status:  http.StatusBadRequest,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
-			case handler_request.ErrInvalidData:
-				h.ResponseError.Errors = append(h.ResponseError.Errors, custom_errors.Error{
-					Message: errRequest.Error(),
-					Status:  http.StatusUnprocessableEntity,
-				})
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusUnprocessableEntity)
+				}
+				values.DataLog.Errors = append(values.DataLog.Errors, err)
+				h.Response.Errors = append(h.Response.Errors, err)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
 			return
 		}
-		respConfirm, errConfirm := h.Dep.Confirm(body.Code, action, ctxTokens.SessionID)
+		respConfirm, errConfirm := h.ServiceAuth.Confirm(body.Code, action, values.SessionID)
 		if errConfirm != nil {
-			h.ResponseError.Errors = append(h.ResponseError.Errors, *errConfirm)
-			if len(h.ResponseError.Errors) == 1 {
-				handler_response.HandlerResponse(writer, h.ResponseError, h.ResponseError.Errors[0].Status)
+			values.DataLog.Errors = append(values.DataLog.Errors, *errConfirm)
+			h.Response.Errors = append(h.Response.Errors, *errConfirm)
+			if len(h.Response.Errors) == 1 {
+				response.HandlerResponse(writer, h.Response, h.Response.Errors[0].Status)
 			} else {
-				handler_response.HandlerResponse(writer, h.ResponseError, http.StatusBadRequest)
+				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
 			return
 		}
-		h.ResponseSuccessful.Success = true
-		h.ResponseSuccessful.Data = respConfirm
-		handler_response.HandlerResponse(writer, h.ResponseSuccessful, http.StatusCreated)
+		h.Response.Success = true
+		h.Response.Data = respConfirm
+		response.HandlerResponse(writer, h.Response, http.StatusCreated)
 	}
 }

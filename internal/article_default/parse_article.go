@@ -2,17 +2,17 @@ package article_default
 
 import (
 	"app/news-parser/internal/common"
+	"app/news-parser/internal/loggers"
+	"app/news-parser/internal/parsing_helper"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
 )
 
 type ArticlesGoroutines struct {
@@ -27,39 +27,42 @@ type Parse struct {
 	LinkCh    chan ArticlesGoroutines
 	ArticleCh chan ArticlesGoroutines
 	IsOk      chan bool
-	//Timeout   context.Context
-	WG   *sync.WaitGroup
-	Repo *RepositoryArticle
+	Browser   *parsing_helper.Browser
+	WG        *sync.WaitGroup
+	Repo      *RepositoryArticle
+	Logger    loggers.Logger
 }
 
-func NewParsing(wg *sync.WaitGroup, repo *RepositoryArticle) *Parse { //, timeout context.Context) *Parse {
+func NewParsing(wg *sync.WaitGroup, repo *RepositoryArticle, browser *parsing_helper.Browser, logger *loggers.Logger) *Parse {
 	return &Parse{
 		LinkCh:    make(chan ArticlesGoroutines, 10),
 		ArticleCh: make(chan ArticlesGoroutines, 10),
 		IsOk:      make(chan bool, 10),
+		Browser:   browser,
 		WG:        wg,
-		//Timeout:   timeout,
-		Repo: repo,
+		Repo:      repo,
 	}
 }
 
 func (p *Parse) parseCategory(url, category, domain, flagText, isArticleOnHeader string) {
-	//go func() {
-	response, errResp := common.SendRequest(url)
+	response, errResp := parsing_helper.SendRequest(url)
 	if errResp != nil {
 		p.LinkCh <- ArticlesGoroutines{Error: errResp}
+		return
 	}
 	defer func() {
 		if errClose := response.Body.Close(); errClose != nil {
 			fmt.Println(errClose)
 		}
-		p.recoveryGoroutine()
+		p.recoveryGoroutine(false)
 	}()
 	doc, err := goquery.NewDocumentFromReader(response.Body)
 	if err != nil {
-		p.LinkCh <- ArticlesGoroutines{Error: errResp}
+		p.LinkCh <- ArticlesGoroutines{Error: err}
+		return
 	}
 	doc.Find("a").Each(func(index int, element *goquery.Selection) {
+		defer p.recoveryGoroutine(false)
 		var article ArticlesGoroutines
 		article.Category = category
 		linkHeader := element.Text()
@@ -83,53 +86,31 @@ func (p *Parse) parseCategory(url, category, domain, flagText, isArticleOnHeader
 			}
 		}
 	})
-	//	select {
-	//	case <-p.Timeout.Done():
-	//		return
-	//	}
-	//}()
-	//select {
-	//case <-p.Timeout.Done():
-	//	return
-	//}
 }
 func (p *Parse) parseArticle(domain, startWord, stopWord string) {
-	//defer p.recoveryGoroutine()
-	//go func() {
-	path, errLaunch := launcher.New().Headless(true).Launch()
-	if errLaunch != nil {
-		log.Println(errLaunch)
-	}
-	browser := rod.New().ControlURL(path).MustConnect()
-	defer func() {
-		if errClose := browser.Close(); errClose != nil {
-			log.Println(errClose)
-		}
-		p.recoveryGoroutine()
-	}()
+	defer p.recoveryGoroutine(false)
 	for art := range p.LinkCh {
 		if art.Error != nil {
 			p.ArticleCh <- art
 		}
-		defer p.recoveryGoroutine()
 		ticker := time.NewTicker(20 * time.Second)
 		go func() {
-			defer p.recoveryGoroutine()
+			defer p.recoveryGoroutine(true)
 			if strings.Contains(art.Url, domain) && art.IsArticle {
-				page := browser.MustPage(art.Url)
+				page := p.Browser.MustPage(art.Url)
 				page.Timeout(10 * time.Second).MustWaitLoad()
 				text, err := page.MustElement("body").Text()
 				if err != nil {
-					log.Println("page parsing error")
+					p.Logger.SystemLogger(slog.LevelInfo, "page parsing error")
 					art.Text = "-"
 					art.IsArticle = false
 					if errClose := page.Close(); errClose != nil {
-						log.Println(errClose)
+						p.Logger.SystemLogger(slog.LevelWarn, "failed to close page browser")
 					}
 					p.IsOk <- true
 				}
 				if errClose := page.Close(); errClose != nil {
-					log.Println(errClose)
+					p.Logger.SystemLogger(slog.LevelWarn, "failed to close page browser")
 				}
 				res := strings.Split(text, "\n")
 				startI := len(res)
@@ -153,16 +134,10 @@ func (p *Parse) parseArticle(domain, startWord, stopWord string) {
 				p.IsOk <- true
 
 			}
-			//select {
-			//case <-p.Timeout.Done():
-			//	return
-			//}
 		}()
 		select {
-		//case <-p.Timeout.Done():
-		//	return
 		case <-ticker.C:
-			log.Println("time to write down text has expired")
+			p.Logger.SystemLogger(slog.LevelInfo, "time to write down text has expired")
 			art.Text = "-"
 			p.ArticleCh <- art
 		case _, isOpen := <-p.IsOk:
@@ -171,21 +146,11 @@ func (p *Parse) parseArticle(domain, startWord, stopWord string) {
 			}
 		}
 	}
-	//	select {
-	//	case <-p.Timeout.Done():
-	//		return
-	//	}
-	//}()
-	//select {
-	//case <-p.Timeout.Done():
-	//	return
-	//}
 }
 func (p *Parse) createRdb(category string) {
-	//go func() {
 	for art := range p.ArticleCh {
 		if art.Error != nil {
-			log.Println(art.Error)
+			p.Logger.SystemLogger(slog.LevelWarn, "failed to save article in DB")
 			continue
 		}
 		if art.Text == "" || art.Text == "-" {
@@ -197,19 +162,13 @@ func (p *Parse) createRdb(category string) {
 			p.Repo.createNewArticle(&art)
 		}
 	}
-	//select {
-	//case <-p.Timeout.Done():
-	//	return
-	//}
-	//}()
-	//select {
-	//case <-p.Timeout.Done():
-	//	return
-	//}
 }
-func (p *Parse) recoveryGoroutine() {
+func (p *Parse) recoveryGoroutine(isPanicBrowser bool) {
 	if errPanic := recover(); errPanic != nil {
-		log.Println(errPanic)
-		p.ArticleCh <- ArticlesGoroutines{Error: errors.New(fmt.Sprint(errPanic))}
+		p.Logger.SystemLogger(slog.LevelWarn, "critical error while parsing links")
+		if isPanicBrowser {
+			p.Browser.RecoveryBrowser()
+		}
+		p.ArticleCh <- ArticlesGoroutines{Error: errors.New("critical error while parsing links")}
 	}
 }

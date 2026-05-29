@@ -4,8 +4,11 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
+	"app/news-parser/internal/event_bus"
+	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/model"
-	"app/news-parser/pkg/event_bus"
+	"app/news-parser/internal/parsing_helper"
+	"app/news-parser/internal/response"
 	"log"
 	"net/http"
 	"strconv"
@@ -20,6 +23,8 @@ type ServiceArticle struct {
 }
 type ServiceArticleDep struct {
 	*event_bus.EventBus
+	*parsing_helper.Browser
+	*loggers.Logger
 	di.IRepoStat
 }
 
@@ -42,10 +47,10 @@ func NewServiceArticle(repoArticle *RepositoryArticle, dep *ServiceArticleDep) *
 		ServiceArticleDep: dep,
 	}
 }
-func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitStr, filterStr, withTextStr string) ([]ResponseCategoryToday, []custom_errors.Error) {
-	var sliceError []custom_errors.Error
+func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitStr, filterStr, withTextStr string) ([]ResponseCategoryToday, []response.Error) {
+	var sliceError []response.Error
 	if !validateCategories(category) {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrCategory.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -60,7 +65,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	} else if filterStr == "false" {
 		filter = false
 	} else {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrIncorrectOnlyArticle.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -71,7 +76,7 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	} else if withTextStr == "false" || withTextStr == "" {
 		withText = false
 	} else {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: custom_errors.ErrIncorrectWithText.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -81,44 +86,44 @@ func (s *ServiceArticle) GetArticlesInCategoryToday(category, offsetStr, limitSt
 	}
 	allArticle, errGetAllArticle := s.repo.GetArticlesInCategoryToday(category, offset, limit, filter, withText)
 	if errGetAllArticle != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrNotFoundArticle.Error(),
 			Status:  http.StatusNotFound,
 		})
 		return nil, sliceError
 	}
 	go s.Publisher(&event_bus.Event{
-		Name: common.EventClickCategory,
+		Name: event_bus.EventClickCategory,
 		Data: category,
 	})
 	return allArticle, nil
 }
-func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, *custom_errors.Error) {
+func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, *response.Error) {
 	id, errParseId := strconv.Atoi(idStr)
 	if errParseId != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: custom_errors.ErrIncorrectArticleId.Error(),
 			Status:  http.StatusBadRequest,
 		}
 	}
 	article, errGetArticle := s.repo.GetArticleToday(id)
 	if errGetArticle != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrLoadArticles.Error(),
 			Status:  http.StatusInternalServerError,
 		}
 	}
 	go s.Publisher(&event_bus.Event{
-		Name: common.EventClickArticle,
+		Name: event_bus.EventClickArticle,
 		Data: article.URL,
 	})
 	return article, nil
 
 }
-func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, []custom_errors.Error) {
-	var sliceError []custom_errors.Error
+func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limitStr, dateStr string) ([]ResponseCategoryArchive, []response.Error) {
+	var sliceError []response.Error
 	if !validateCategories(category) {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: ErrCategory.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -129,7 +134,7 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	}
 	date, errParseDate := time.Parse(time.DateOnly, dateStr)
 	if errParseDate != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: custom_errors.ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		})
@@ -139,7 +144,7 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	}
 	archiveArticles, errGetArticlesArch := s.repo.GetArticlesInCategoryArchive(category, offset, limit, date)
 	if errGetArticlesArch != nil {
-		sliceError = append(sliceError, custom_errors.Error{
+		sliceError = append(sliceError, response.Error{
 			Message: errGetArticlesArch.Error(),
 			Status:  http.StatusUnauthorized,
 		})
@@ -154,21 +159,21 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 		respCategoryArch = append(respCategoryArch, tempArch)
 	}
 	go s.Publisher(&event_bus.Event{
-		Name: common.EventClickCategory,
+		Name: event_bus.EventClickCategory,
 		Data: category,
 	})
 	return respCategoryArch, nil
 }
-func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, *custom_errors.Error) {
+func (s *ServiceArticle) GetArchiveArticle(uuid string) (*model.ArticleArchive, *response.Error) {
 	archArticle, errGetArchArticle := s.repo.GetArchiveArticle(uuid)
 	if errGetArchArticle != nil {
-		return nil, &custom_errors.Error{
+		return nil, &response.Error{
 			Message: ErrNotFoundArticle.Error(),
 			Status:  http.StatusNotFound,
 		}
 	}
 	go s.Publisher(&event_bus.Event{
-		Name: common.EventClickArticle,
+		Name: event_bus.EventClickArticle,
 		Data: archArticle.URL,
 	})
 	return archArticle, nil
@@ -257,27 +262,20 @@ func (s *ServiceArticle) saveDataRedis() {
 }
 
 func (s *ServiceArticle) loadNewInfo() {
-	linksList, errLinkList := s.repo.loadLinkList()
-	if errLinkList != nil {
-		log.Println(errLinkList)
-		return
+	var linksList = [1]string{
+		`https://www.bbc.com/russian>politics>https://www.bbc.com>Время чтения:>Темы>articles>~`,
+		//`https://edition.cnn.com/sport>sport>https://edition.cnn.com>By>World>/\d\d\d\d/\d\d/\d\d/sport>Video`,
+		//`https://www.cnbc.com/business/>business>https://www.cnbc.com>In this article>Choose CNBC as your preferred source on Google and never miss a moment from the most trusted name in business news.>/\d\d\d\d/\d\d/\d\d/>~`,
 	}
 	var wg sync.WaitGroup
 	for _, list := range linksList {
 		data := strings.Split(list, ">")
-		//timeout, cancel := context.WithTimeout(context.Background(), time.Second*120) //!!
-		//defer cancel()
-		parse := NewParsing(&wg, s.repo) //, timeout)
+		parse := NewParsing(&wg, s.repo, s.Browser, s.Logger)
 		wg.Add(3)
-
 		go func(url, category, domain, flagText, isArticleOnHeader string) {
 			defer wg.Done()
 			parse.parseCategory(url, category, domain, flagText, isArticleOnHeader)
 			close(parse.LinkCh)
-			//select {
-			//case <-parse.Timeout.Done():
-			//	return
-			//}
 		}(data[0], data[1], data[2], data[5], data[6])
 
 		go func(domain, startWord, stopWord string) {
@@ -285,65 +283,15 @@ func (s *ServiceArticle) loadNewInfo() {
 			parse.parseArticle(domain, startWord, stopWord)
 			close(parse.IsOk)
 			close(parse.ArticleCh)
-			//select {
-			//case <-parse.Timeout.Done():
-			//	return
-			//}
 		}(data[2], data[3], data[4])
 
 		go func(category string) {
 			defer wg.Done()
 			parse.createRdb(category)
-			//select {
-			//case <-parse.Timeout.Done():
-			//	return
-			//}
 		}(data[1])
 	}
 	wg.Wait()
 }
-
-//var wg sync.WaitGroup
-//for _, list := range linksList {
-//	data := strings.Split(list, " ")
-//	parse := NewParsing(&wg, s.repo)
-//	wg.Add(3)
-//
-//	go func(url, category, domain, flagText string) {
-//		defer wg.Done()
-//		parse.parseCategory(url, category, domain, flagText)
-//		close(parse.LinkCh)
-//	}(data[0], data[1], data[2], data[5])
-//
-//	go func(category, domain, startWord, stopWord string) {
-//		defer wg.Done()
-//		parse.parseArticle(category, domain, startWord, stopWord)
-//		close(parse.IsOk)
-//		close(parse.ArticleCh)
-//	}(data[1], data[2], data[3], data[4])
-//
-//	go func(category string) {
-//		defer wg.Done()
-//		parse.createRdb(category)
-//	}(data[1])
-//
-//}
-//wg.Wait()
-//chFinish <- true
-
-//	for _, list := range linksList {
-//		fmt.Println(list)
-//		data := strings.Split(list, " ")
-//		var wg sync.WaitGroup
-//		parse := NewParsing(&wg, s.repo)
-//		wg.Add(3)
-//		go parse.parseCategory(data[0], data[1])
-//		go parse.parseArticle(data[1])
-//		go parse.createRdb(data[1])
-//		defer func() {
-//			wg.Wait()
-//		}()
-//	}
 func (s *ServiceArticle) RemoveUserArticles() {
 	ticker := time.NewTicker(common.Day)
 	defer ticker.Stop()

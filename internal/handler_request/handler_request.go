@@ -11,7 +11,6 @@ import (
 
 var (
 	ErrIncorrectFormat = errors.New("incorrect format of transmitted data")
-	ErrInvalidData     = errors.New("the data transmitted was incorrect")
 	ErrBodyIsEmpty     = errors.New("request body is empty")
 )
 
@@ -27,7 +26,7 @@ func HandlerRequest[T any](request *http.Request) (*T, error) {
 	}
 	errValidate := validator.New().Struct(payload)
 	if errValidate != nil {
-		return nil, ErrInvalidData
+		return nil, errValidate
 	}
 	return &payload, nil
 }

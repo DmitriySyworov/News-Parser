@@ -1,21 +1,29 @@
 package main
 
 import (
+	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/open_Db"
+	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	errEnv := godotenv.Load(".env")
-	if errEnv != nil {
-		panic(errEnv)
+	logger := loggers.NewLogger()
+	godotenv.Load(".env")
+	dsn := os.Getenv("DSN")
+	if dsn == "" {
+		logger.SystemLogger(slog.LevelError, "environment variable DSN is empty")
+		os.Exit(1)
 	}
-	db := open_Db.OpenPostgres(os.Getenv("DSN"))
+	logger.SystemLogger(slog.LevelInfo, "DSN environment variable retrieved successfully")
+	db := open_Db.OpenPostgres(dsn, logger)
 	errMigrate := db.AutoMigrate(&model.User{}, &model.UserArticle{}, &model.UserArticleStat{}, &model.ArticleArchive{}, &model.CategoryStat{}, &model.ArticleStat{})
 	if errMigrate != nil {
-		panic(errMigrate)
+		logger.SystemLogger(slog.LevelError, "table migration failed")
+		os.Exit(1)
 	}
+	logger.SystemLogger(slog.LevelInfo, "table migration successfully")
 }

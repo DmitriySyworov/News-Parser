@@ -3,9 +3,9 @@ package article_default
 import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/generate_random"
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/open_Db"
-	"app/news-parser/pkg/generate_random"
 	"context"
 	"errors"
 	"fmt"
@@ -28,8 +28,6 @@ const (
 	fieldUrl       = "url"
 	fieldText      = "text"
 	fieldIsArticle = "is_article"
-
-	linkList = "LinkList"
 )
 
 func NewRepositoryArticle(postgres *open_Db.PostgresDb, redis *open_Db.RedisDb) *RepositoryArticle {
@@ -210,15 +208,6 @@ func (r *RepositoryArticle) allArticlesRedis() ([]model.ArticleArchive, error) {
 		return nil, errors.New("failed to get all the articles")
 	}
 	return sliceArticles, nil
-}
-func (r *RepositoryArticle) loadLinkList() ([]string, error) {
-	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
-	defer cancel()
-	list, errGetList := r.RedisDb.LRange(rdbContext, linkList, 0, -1).Result()
-	if errGetList != nil || len(list) == 0 {
-		return nil, errors.New("failed to load LinkList")
-	}
-	return list, nil
 }
 func (r *RepositoryArticle) createNewArticle(art *ArticlesGoroutines) {
 	rdbContext, cancel := context.WithTimeout(context.Background(), common.RdbTimeout)
