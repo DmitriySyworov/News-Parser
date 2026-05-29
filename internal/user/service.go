@@ -2,13 +2,13 @@ package user
 
 import (
 	"app/news-parser/configs"
+	"app/news-parser/internal/JWT"
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/generate_random"
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/response"
-	"app/news-parser/pkg/JWT"
-	"app/news-parser/pkg/generate_random"
-	"app/news-parser/pkg/handler_request"
+	"app/news-parser/internal/send_letter"
 	"net/http"
 	"time"
 
@@ -47,7 +47,7 @@ func (s *ServiceUser) RemoveMyUser(userUUID, password, action string) (*common.R
 	errPassword := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if errPassword != nil {
 		return nil, &response.Error{
-			Message: ErrIncorrectPassword.Error(),
+			Message: custom_errors.ErrIncorrectPassword.Error(),
 			Status:  http.StatusUnauthorized,
 		}
 	}
@@ -75,7 +75,7 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 		errPassword := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))
 		if errPassword != nil {
 			return nil, nil, &response.Error{
-				Message: ErrIncorrectPassword.Error(),
+				Message: custom_errors.ErrIncorrectPassword.Error(),
 				Status:  http.StatusUnauthorized,
 			}
 		}
@@ -133,7 +133,8 @@ func (s *ServiceUser) UpdateMyUser(body *RequestUpdateUser, userUUID string) (*R
 func (s *ServiceUser) helperSecurity(email, action string, bodyUpdate *RequestUpdateUser) (string, error) {
 	code := generate_random.GenerateNumbers(common.LengthTempCode)
 	sessionId := generate_random.GenerateString(common.LengthSession)
-	errSend := common.SendEmailLetter(email, uint(code), s.Dep.Configs)
+	letter := send_letter.NewSenderLetter(s.Dep.ApiEmail, s.Dep.ApiPassword, s.Dep.Address, s.Dep.AddressHost)
+	errSend := letter.SendEmailLetter(email, uint(code))
 	if errSend != nil {
 		return "", errSend
 	}
@@ -290,7 +291,7 @@ func (s *ServiceUser) ConfirmMyUser(userUUID, sessionID, action string, code uin
 		}
 	}
 	return nil, &response.Error{
-		Message: handler_request.ErrInvalidData.Error(),
+		Message: ErrIncorrectAction.Error(),
 		Status:  http.StatusBadRequest,
 	}
 }

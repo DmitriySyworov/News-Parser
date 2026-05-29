@@ -1,21 +1,32 @@
 package middleware
 
 import (
+	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/response"
 )
 
 type ManagerMiddleware struct {
 	Signature string
 	resp      response.Response[any]
-	ContextToken
+	*ContextValues
+	Logger *loggers.Logger
 }
-type ContextToken struct {
+type ContextValues struct {
 	SessionID string
-	UUID      string
+	UserUUID  string
+	DataLog   *loggers.DataLog
 }
 
-func NewManagerMiddleware(signature string) *ManagerMiddleware {
+const (
+	KeyContextValues = "keyContextValues"
+)
+
+func NewManagerMiddleware(signature string, logger *loggers.Logger) *ManagerMiddleware {
 	return &ManagerMiddleware{
 		Signature: signature,
+		Logger:    logger,
+		ContextValues: &ContextValues{
+			DataLog: logger.DataLog,
+		},
 	}
 }

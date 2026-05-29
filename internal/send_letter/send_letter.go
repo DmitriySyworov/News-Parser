@@ -1,8 +1,10 @@
 package send_letter
 
 import (
+	"app/news-parser/internal/custom_errors"
 	"fmt"
 	"net/smtp"
+	"time"
 
 	"github.com/jordan-wright/email"
 )
@@ -24,7 +26,7 @@ func NewSenderLetter(apiEmail, apiPassword, address, addressHost string) *Sender
 		AddressHost: addressHost,
 	}
 }
-func (l *SenderLetter) SendEmailLetter(userEmail string, tempCode uint) {
+func (l *SenderLetter) send(userEmail string, tempCode uint) {
 	defer close(l.ChErr)
 	e := email.NewEmail()
 	e.From = l.ApiEmail
@@ -35,4 +37,17 @@ func (l *SenderLetter) SendEmailLetter(userEmail string, tempCode uint) {
 		l.ChErr <- errSend
 	}
 	l.ChErr <- nil
+}
+func (l *SenderLetter) SendEmailLetter(userEmail string, tempCode uint) error {
+	after := time.After(time.Second * 30)
+	go l.send(userEmail, tempCode)
+	select {
+	case <-after:
+		return custom_errors.ErrSendLetter
+	case errSend := <-l.ChErr:
+		if errSend != nil {
+			return errSend
+		}
+		return nil
+	}
 }

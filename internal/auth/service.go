@@ -2,13 +2,14 @@ package auth
 
 import (
 	"app/news-parser/configs"
+	"app/news-parser/internal/JWT"
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
+	"app/news-parser/internal/generate_random"
 	"app/news-parser/internal/model"
 	"app/news-parser/internal/response"
-	"app/news-parser/pkg/JWT"
-	"app/news-parser/pkg/generate_random"
+	"app/news-parser/internal/send_letter"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -17,7 +18,7 @@ import (
 
 type ServiceAuth struct {
 	Repo *RepositoryAuth
-	*ServiceAuthDep
+	Dep  *ServiceAuthDep
 }
 
 type ServiceAuthDep struct {
@@ -27,12 +28,12 @@ type ServiceAuthDep struct {
 
 func NewServiceAuth(repo *RepositoryAuth, dep *ServiceAuthDep) *ServiceAuth {
 	return &ServiceAuth{
-		Repo:           repo,
-		ServiceAuthDep: dep,
+		Repo: repo,
+		Dep:  dep,
 	}
 }
 func (s *ServiceAuth) Register(body *RequestRegister) (*common.ResponseAuth, *response.Error) {
-	if errUserExist := s.IRepoUser.IsUserExistByNameAndEmail(body.Name, body.Email); errUserExist != nil {
+	if errUserExist := s.Dep.IRepoUser.IsUserExistByNameAndEmail(body.Name, body.Email); errUserExist != nil {
 		return nil, &response.Error{
 			Message: errUserExist.Error(),
 			Status:  http.StatusUnauthorized,
@@ -55,7 +56,7 @@ func (s *ServiceAuth) Register(body *RequestRegister) (*common.ResponseAuth, *re
 	return respAuth, nil
 }
 func (s *ServiceAuth) Login(body *RequestLogin) (*ResponseConfirm, *response.Error) {
-	user, errGetUser := s.IRepoUser.GetUserByEmail(body.Email)
+	user, errGetUser := s.Dep.IRepoUser.GetUserByEmail(body.Email)
 	if errGetUser != nil {
 		return nil, &response.Error{
 			Message: ErrLoginEmailOrPassword.Error(),
@@ -69,7 +70,7 @@ func (s *ServiceAuth) Login(body *RequestLogin) (*ResponseConfirm, *response.Err
 			Status:  http.StatusUnauthorized,
 		}
 	}
-	j := JWT.NewJWT(s.Signature)
+	j := JWT.NewJWT(s.Dep.Signature)
 	token, errJWT := j.CreateJWT(user.UserUUID)
 	if errJWT != nil {
 		return nil, &response.Error{
@@ -91,7 +92,7 @@ const (
 func (s *ServiceAuth) Recovery(email, newPassword, action string) (*common.ResponseAuth, *response.Error) {
 	switch action {
 	case actionRecoveryRemove:
-		user, errGetUserByEmail := s.IRepoUser.GetRemoveUserByEmail(email)
+		user, errGetUserByEmail := s.Dep.IRepoUser.GetRemoveUserByEmail(email)
 		if errGetUserByEmail != nil {
 			return nil, &response.Error{
 				Message: custom_errors.ErrUserNotExist.Error(),
@@ -120,7 +121,7 @@ func (s *ServiceAuth) Recovery(email, newPassword, action string) (*common.Respo
 				Status:  http.StatusUnauthorized,
 			}
 		}
-		user, errGetByEmail := s.IRepoUser.GetUserByEmail(email)
+		user, errGetByEmail := s.Dep.IRepoUser.GetUserByEmail(email)
 		if errGetByEmail != nil {
 			return nil, &response.Error{
 				Message: custom_errors.ErrUserNotExist.Error(),
@@ -145,8 +146,10 @@ func (s *ServiceAuth) Recovery(email, newPassword, action string) (*common.Respo
 func (s *ServiceAuth) authHelper(name, email, hashPass string) (*common.ResponseAuth, error) {
 	sessionId := generate_random.GenerateString(common.LengthSession)
 	tempCode := generate_random.GenerateNumbers(common.LengthTempCode)
-	if errSendEmail := common.SendEmailLetter(email, uint(tempCode), s.Configs); errSendEmail != nil {
-		return nil, errSendEmail
+	letter := send_letter.NewSenderLetter(s.Dep.ApiEmail, s.Dep.ApiPassword, s.Dep.Address, s.Dep.AddressHost)
+	errSend := letter.SendEmailLetter(email, uint(tempCode))
+	if errSend != nil {
+		return nil, errSend
 	}
 	if errTempUserCreate := s.Repo.CreateTemporaryUser(&model.TemporaryData{
 		Name:      name,
@@ -157,7 +160,7 @@ func (s *ServiceAuth) authHelper(name, email, hashPass string) (*common.Response
 	}); errTempUserCreate != nil {
 		return nil, custom_errors.ErrFailedSecurity
 	}
-	j := JWT.NewJWT(s.Signature)
+	j := JWT.NewJWT(s.Dep.Signature)
 	token, errToken := j.CreateTemporaryJWT(sessionId)
 	if errToken != nil {
 		return nil, custom_errors.ErrFailedSecurity
@@ -182,11 +185,11 @@ func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseCon
 			Status:  http.StatusUnauthorized,
 		}
 	}
-	j := JWT.NewJWT(s.Signature)
+	j := JWT.NewJWT(s.Dep.Signature)
 	var UUID string
 	switch action {
 	case actionRegister:
-		if errUserExist := s.IRepoUser.IsUserExistByNameAndEmail(tempUser.Name, tempUser.Email); errUserExist != nil {
+		if errUserExist := s.Dep.IRepoUser.IsUserExistByNameAndEmail(tempUser.Name, tempUser.Email); errUserExist != nil {
 			return nil, &response.Error{
 				Message: errUserExist.Error(),
 				Status:  http.StatusUnauthorized,
@@ -199,7 +202,7 @@ func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseCon
 			Password: tempUser.Password,
 			UserUUID: uuId,
 		}
-		if errCreate := s.IRepoUser.CreateUser(user); errCreate != nil {
+		if errCreate := s.Dep.IRepoUser.CreateUser(user); errCreate != nil {
 			return nil, &response.Error{
 				Message: ErrSaveDataUser.Error(),
 				Status:  http.StatusInternalServerError,
@@ -207,14 +210,14 @@ func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseCon
 		}
 		UUID = uuId
 	case actionRecoveryRemove:
-		user, errGetUserByEmail := s.IRepoUser.GetRemoveUserByEmail(tempUser.Email)
+		user, errGetUserByEmail := s.Dep.IRepoUser.GetRemoveUserByEmail(tempUser.Email)
 		if errGetUserByEmail != nil {
 			return nil, &response.Error{
 				Message: custom_errors.ErrUserNotExist.Error(),
 				Status:  http.StatusNotFound,
 			}
 		}
-		errRecovery := s.IRepoUser.RecoveryUser(user.UserUUID)
+		errRecovery := s.Dep.IRepoUser.RecoveryUser(user.UserUUID)
 		if errRecovery != nil {
 			return nil, &response.Error{
 				Message: ErrFailedRecovery.Error(),
@@ -223,14 +226,14 @@ func (s *ServiceAuth) Confirm(code uint, action, sessionId string) (*ResponseCon
 		}
 		UUID = user.UserUUID
 	case actionRecoveryPassword:
-		user, errGetByEmail := s.IRepoUser.GetUserByEmail(tempUser.Email)
+		user, errGetByEmail := s.Dep.IRepoUser.GetUserByEmail(tempUser.Email)
 		if errGetByEmail != nil {
 			return nil, &response.Error{
 				Message: custom_errors.ErrUserNotExist.Error(),
 				Status:  http.StatusNotFound,
 			}
 		}
-		_, errUpdate := s.IRepoUser.UpdateMyUserOneColumn(user.UserUUID, "password", tempUser.Password)
+		_, errUpdate := s.Dep.IRepoUser.UpdateMyUserOneColumn(user.UserUUID, "password", tempUser.Password)
 		if errUpdate != nil {
 			return nil, &response.Error{
 				Message: ErrFailedChangePassword.Error(),

@@ -2,23 +2,27 @@ package stat
 
 import (
 	"app/news-parser/internal/custom_errors"
+	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/middleware"
 	"app/news-parser/internal/response"
+	"log/slog"
 	"net/http"
 )
 
 type HandlerStat struct {
 	response.Response[any]
-	*HandlerStatDep
+	*ServiceStat
+	Dep *HandlerStatDep
 }
 type HandlerStatDep struct {
-	*ServiceStat
+	*loggers.Logger
 	*middleware.ManagerMiddleware
 }
 
-func NewHandlerStat(router *http.ServeMux, dep *HandlerStatDep) {
+func NewHandlerStat(router *http.ServeMux, service *ServiceStat, dep *HandlerStatDep) {
 	stat := &HandlerStat{
-		HandlerStatDep: dep,
+		ServiceStat: service,
+		Dep:         dep,
 	}
 	router.HandleFunc("GET /stat/article/category", stat.GetStatCategoryByDate())
 	router.HandleFunc("GET /stat/article/category/alltime", stat.GetStatCategoryAllTime())
@@ -32,7 +36,13 @@ func (h *HandlerStat) GetStatCategoryByDate() http.HandlerFunc {
 		defer func() {
 			h.Response = response.Response[any]{}
 		}()
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
 		dateStr := request.URL.Query().Get("date")
+		values.DataLog.MapLog["date"] = dateStr
 		if dateStr == "" {
 			h.Response.Errors = append(h.Response.Errors, response.Error{
 				Message: ErrIncorrectDate.Error(),
@@ -43,6 +53,7 @@ func (h *HandlerStat) GetStatCategoryByDate() http.HandlerFunc {
 		}
 		respStatDateCategories, errGetStat := h.ServiceStat.GetStatCategoryByDate(dateStr)
 		if errGetStat != nil {
+			values.DataLog.Errors = append(values.DataLog.Errors, *errGetStat)
 			h.Response.Errors = append(h.Response.Errors, *errGetStat)
 			switch errGetStat.Message {
 			case ErrIncorrectDate.Error():
@@ -62,8 +73,14 @@ func (h *HandlerStat) GetStatCategoryAllTime() http.HandlerFunc {
 		defer func() {
 			h.Response = response.Response[any]{}
 		}()
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
 		respStatCategoryAll, errGetAllStat := h.ServiceStat.Repo.GetStatCategoryAllTime()
 		if errGetAllStat != nil {
+			values.DataLog.Errors = append(values.DataLog.Errors, *errGetAllStat)
 			h.Response.Errors = append(h.Response.Errors, *errGetAllStat)
 			response.HandlerResponse(writer, h.Response, http.StatusNotFound)
 			return
@@ -78,7 +95,13 @@ func (h *HandlerStat) GetStatArticleByDate() http.HandlerFunc {
 		defer func() {
 			h.Response = response.Response[any]{}
 		}()
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
 		dateStr := request.URL.Query().Get("date")
+		values.DataLog.MapLog["date"] = dateStr
 		if dateStr == "" {
 			h.Response.Errors = append(h.Response.Errors, response.Error{
 				Message: ErrIncorrectDate.Error(),
@@ -89,6 +112,7 @@ func (h *HandlerStat) GetStatArticleByDate() http.HandlerFunc {
 		}
 		respStatDateArticles, errGetStat := h.ServiceStat.GetStatArticleByDate(dateStr)
 		if errGetStat != nil {
+			values.DataLog.Errors = append(values.DataLog.Errors, *errGetStat)
 			h.Response.Errors = append(h.Response.Errors, *errGetStat)
 			switch errGetStat.Message {
 			case ErrIncorrectDate.Error():
@@ -108,8 +132,14 @@ func (h *HandlerStat) GetStatArticleAllTime() http.HandlerFunc {
 		defer func() {
 			h.Response = response.Response[any]{}
 		}()
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
+		if !ok {
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
 		respStatArticleAll, errGetAllStat := h.ServiceStat.Repo.GetStatArticleAllTime()
 		if errGetAllStat != nil {
+			values.DataLog.Errors = append(values.DataLog.Errors, *errGetAllStat)
 			h.Response.Errors = append(h.Response.Errors, *errGetAllStat)
 			response.HandlerResponse(writer, h.Response, http.StatusNotFound)
 			return
@@ -124,20 +154,28 @@ func (h *HandlerStat) GetStatUserArticle() http.HandlerFunc {
 		defer func() {
 			h.Response = response.Response[any]{}
 		}()
-		ctxValue := request.Context().Value(middleware.KeyContext)
-		ctxTokens, ok := ctxValue.(middleware.ContextToken)
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
 		if !ok {
-			h.Response.Errors = append(h.Response.Errors, response.Error{
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
+		values.DataLog.UserUUID = values.UserUUID
+		if len(values.UserUUID) != 36 {
+			err := response.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
 				Status:  http.StatusUnauthorized,
-			})
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
 			response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			return
 		}
 		date := request.URL.Query().Get("date")
-		respUserStat, sliceErrGetStat := h.ServiceStat.GetUserArticleStat(ctxTokens.UUID, date)
+		values.DataLog.MapLog["date"] = date
+		respUserStat, sliceErrGetStat := h.ServiceStat.GetUserArticleStat(values.UserUUID, date)
 		h.Response.Errors = append(h.Response.Errors, sliceErrGetStat...)
 		if len(h.Response.Errors) != 0 {
+			values.DataLog.Errors = append(values.DataLog.Errors, sliceErrGetStat...)
 			if len(h.Response.Errors) == 1 {
 				response.HandlerResponse(writer, h.Response, h.Response.Errors[0].Status)
 			} else {
@@ -155,19 +193,26 @@ func (h *HandlerStat) GetStatUserArticleAllTime() http.HandlerFunc {
 		defer func() {
 			h.Response = response.Response[any]{}
 		}()
-		ctxValue := request.Context().Value(middleware.KeyContext)
-		ctxTokens, ok := ctxValue.(middleware.ContextToken)
+		ctxValues := request.Context().Value(middleware.KeyContextValues)
+		values, ok := ctxValues.(*middleware.ContextValues)
 		if !ok {
-			h.Response.Errors = append(h.Response.Errors, response.Error{
+			h.Dep.Logger.SystemLogger(slog.LevelError, custom_errors.ErrFailedTypeContextValues.Error()+request.Pattern)
+		}
+		values.DataLog.UserUUID = values.UserUUID
+		if len(values.UserUUID) != 36 {
+			err := response.Error{
 				Message: custom_errors.ErrIncorrectToken.Error(),
 				Status:  http.StatusUnauthorized,
-			})
+			}
+			values.DataLog.Errors = append(values.DataLog.Errors, err)
+			h.Response.Errors = append(h.Response.Errors, err)
 			response.HandlerResponse(writer, h.Response, http.StatusUnauthorized)
 			return
 		}
-		respStat, errGetAllTimeStat := h.ServiceStat.GetUserArticleAllTimeStat(ctxTokens.UUID)
+		respStat, errGetAllTimeStat := h.ServiceStat.GetUserArticleAllTimeStat(values.UserUUID)
 		h.Response.Errors = append(h.Response.Errors, *errGetAllTimeStat)
 		if len(h.Response.Errors) != 0 {
+			values.DataLog.Errors = append(values.DataLog.Errors, *errGetAllTimeStat)
 			if len(h.Response.Errors) == 1 {
 				response.HandlerResponse(writer, h.Response, h.Response.Errors[0].Status)
 			} else {

@@ -4,9 +4,11 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
+	"app/news-parser/internal/event_bus"
+	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/model"
+	"app/news-parser/internal/parsing_helper"
 	"app/news-parser/internal/response"
-	"app/news-parser/pkg/event_bus"
 	"net/http"
 	"sync"
 	"time"
@@ -19,6 +21,8 @@ type ServiceArticleUser struct {
 type ServiceArticleUserDep struct {
 	di.IRepoUser
 	*event_bus.EventBus
+	*parsing_helper.Browser
+	*loggers.Logger
 }
 
 func NewServiceArticleUser(repo *RepositoryArticleUser, dep *ServiceArticleUserDep) *ServiceArticleUser {
@@ -76,7 +80,7 @@ func (s *ServiceArticleUser) CreateUserArticles(body *RequestCreateArticle, user
 		return nil, sliceError
 	}
 	event := event_bus.Event{
-		Name: common.EventCreateUserArticle,
+		Name: event_bus.EventCreateUserArticle,
 		Data: common.StatDataUserArticle{
 			UserUUID: userUUID,
 			Number:   counterArticle,
@@ -125,7 +129,7 @@ func (s *ServiceArticleUser) UpdateUserArticle(category, userUUID, articleUUID, 
 		}
 	}
 	event := event_bus.Event{
-		Name: common.EventUpdateUserArticle,
+		Name: event_bus.EventUpdateUserArticle,
 		Data: common.StatDataUserArticle{
 			UserUUID: userUUID,
 			Number:   1,
@@ -245,7 +249,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 			})
 		}
 		event := event_bus.Event{
-			Name: common.EventUpdateUserArticle,
+			Name: event_bus.EventUpdateUserArticle,
 			Data: common.StatDataUserArticle{
 				UserUUID: userUUID,
 				Number:   int(countUpdate),
@@ -312,7 +316,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 		}
 		wg.Wait()
 		event := event_bus.Event{
-			Name: common.EventUpdateUserArticle,
+			Name: event_bus.EventUpdateUserArticle,
 			Data: common.StatDataUserArticle{
 				UserUUID: userUUID,
 				Number:   countUpdate,
@@ -361,7 +365,7 @@ func (s *ServiceArticleUser) UpdateBatchUserArticles(userUUID, domain, category,
 			})
 		}
 		event := event_bus.Event{
-			Name: common.EventUpdateUserArticle,
+			Name: event_bus.EventUpdateUserArticle,
 			Data: common.StatDataUserArticle{
 				UserUUID: userUUID,
 				Number:   countUpdate,
@@ -463,7 +467,7 @@ func (s *ServiceArticleUser) RemoveUserArticle(articleUUID, userUUID, typeRemove
 			return sliceError
 		}
 		event := event_bus.Event{
-			Name: common.EventSoftDeleteUserArticle,
+			Name: event_bus.EventSoftDeleteUserArticle,
 			Data: common.StatDataUserArticle{
 				UserUUID: userUUID,
 				Number:   1,
@@ -479,7 +483,7 @@ func (s *ServiceArticleUser) RemoveUserArticle(articleUUID, userUUID, typeRemove
 			return sliceError
 		}
 		event := event_bus.Event{
-			Name: common.EventHardDeleteUserArticle,
+			Name: event_bus.EventHardDeleteUserArticle,
 			Data: common.StatDataUserArticle{
 				UserUUID: userUUID,
 				Number:   1,
@@ -528,7 +532,7 @@ func (s *ServiceArticleUser) RemoveAllUserArticle(userUUID, typeRemove string) [
 			return sliceError
 		}
 		event := event_bus.Event{
-			Name: common.EventSoftDeleteUserArticle,
+			Name: event_bus.EventSoftDeleteUserArticle,
 			Data: common.StatDataUserArticle{
 				UserUUID: userUUID,
 				Number:   countRemove,
@@ -552,7 +556,7 @@ func (s *ServiceArticleUser) RemoveAllUserArticle(userUUID, typeRemove string) [
 			return sliceError
 		}
 		event := event_bus.Event{
-			Name: common.EventHardDeleteUserArticle,
+			Name: event_bus.EventHardDeleteUserArticle,
 			Data: common.StatDataUserArticle{
 				UserUUID: userUUID,
 				Number:   countDelete,
@@ -688,7 +692,7 @@ func (s *ServiceArticleUser) RecoveryUserArticle(userUUID, articleUUId string) (
 		return nil, sliceError
 	}
 	event := event_bus.Event{
-		Name: common.EventRecoveryUserArticle,
+		Name: event_bus.EventRecoveryUserArticle,
 		Data: common.StatDataUserArticle{
 			UserUUID: userUUID,
 			Number:   1,
@@ -723,7 +727,7 @@ func (s *ServiceArticleUser) RecoveryAllUserArticle(userUUID string) (*ResponseS
 		return nil, sliceError
 	}
 	event := event_bus.Event{
-		Name: common.EventRecoveryUserArticle,
+		Name: event_bus.EventRecoveryUserArticle,
 		Data: common.StatDataUserArticle{
 			UserUUID: userUUID,
 			Number:   countRecovery,

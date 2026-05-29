@@ -3,22 +3,69 @@ services:
     container_name: postgres-news-parser
     image: postgres:16.4
     ports:
-      - "5432:5432"
-
+      - "${POSTGRES_EXTERNAL_PORT}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+        test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+        interval: 5s
+        timeout: 5s
+        retries: 5
     volumes:
       - ./data/postgres-data:/var/lib/postgresql/data
   redis:
     container_name: redis-news-parser
     image: redis:8.0.2
     ports:
-      - "6379:6379"
-    command: redis-server --requirepass ${REDIS}
+      - "${REDIS_EXTERNAL_PORT}:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
       - ./data/redis-data:/data
+  migrator:
+    container_name: migrations
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["./migrator"]
+    environment:
+      DSN : ${DSN}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+  app:
+    container_name: news-parser
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["./parser-app"]
+    ports:
+      - "${API_EXTERNAL_PORT}:8080"
+    init: true
+    environment:
+      DSN : ${DSN}
+      REDIS_PASSWORD : ${REDIS_PASSWORD}
+      REDIS_ADDRESS : ${REDIS_ADDRESS}
+      JWT_SIGNATURE : ${JWT_SIGNATURE}
+      API_EXTERNAL_PORT : ${API_EXTERNAL_PORT}
+      API_EMAIL : ${API_EMAIL}
+      API_PASSWORD : ${API_PASSWORD}
+      SMTP_ADDRESS_HOST : ${SMTP_ADDRESS_HOST}
+      SMTP_ADDRESS : ${SMTP_ADDRESS}
+      ROD_BIN : /usr/bin/chromium-browser
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
 volumes:
   redis-data:
   postgres-data:

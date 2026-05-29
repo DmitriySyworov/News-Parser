@@ -1,9 +1,9 @@
 package middleware
 
 import (
+	"app/news-parser/internal/JWT"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/response"
-	"app/news-parser/pkg/JWT"
 	"context"
 	"net/http"
 	"strings"
@@ -19,10 +19,6 @@ func helperValidateToken(header string) (string, error) {
 	}
 	return sliceHeader[1], nil
 }
-
-const (
-	KeyContext = "keyContext"
-)
 
 func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -49,11 +45,11 @@ func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 			response.HandlerResponse(writer, m.resp, http.StatusUnauthorized)
 			return
 		}
-		if tokens, ok := request.Context().Value(KeyContext).(ContextToken); ok && tokens.UUID != "" {
-			m.ContextToken.UUID = tokens.UUID
+		if tokens, ok := request.Context().Value(KeyContextValues).(ContextValues); ok && tokens.UserUUID != "" {
+			m.ContextValues.UserUUID = tokens.UserUUID
 		}
-		m.ContextToken.SessionID = sessionId
-		valueCtx := context.WithValue(context.Background(), KeyContext, m.ContextToken)
+		m.ContextValues.SessionID = sessionId
+		valueCtx := context.WithValue(context.Background(), KeyContextValues, m.ContextValues)
 		requestCTX := request.WithContext(valueCtx)
 		next.ServeHTTP(writer, requestCTX)
 	})
@@ -84,11 +80,11 @@ func (m *ManagerMiddleware) IsAuthJWT(next http.Handler) http.Handler {
 			response.HandlerResponse(writer, m.resp, http.StatusUnauthorized)
 			return
 		}
-		if tokens, ok := request.Context().Value(KeyContext).(ContextToken); ok && tokens.SessionID != "" {
-			m.ContextToken.SessionID = tokens.SessionID
+		if tokens, ok := request.Context().Value(KeyContextValues).(ContextValues); ok && tokens.SessionID != "" {
+			m.ContextValues.SessionID = tokens.SessionID
 		}
-		m.ContextToken.UUID = UUID
-		valueCtx := context.WithValue(context.Background(), KeyContext, m.ContextToken)
+		m.ContextValues.UserUUID = UUID
+		valueCtx := context.WithValue(context.Background(), KeyContextValues, m.ContextValues)
 		requestCTX := request.WithContext(valueCtx)
 		next.ServeHTTP(writer, requestCTX)
 	})

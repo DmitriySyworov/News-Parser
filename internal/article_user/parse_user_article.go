@@ -4,6 +4,7 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/model"
+	"app/news-parser/internal/parsing_helper"
 	"errors"
 	"log"
 	"net/http"
@@ -35,11 +36,11 @@ func NewCustomParsing(repo *RepositoryArticleUser) *CustomParse {
 }
 func (cp *CustomParse) customParseCategory(url, category, UserUUID string, isText bool) {
 	defer cp.recoveryCustomGoroutine()
-	response, errResp := common.SendRequest(url)
+	response, errResp := parsing_helper.SendRequest(url)
 	if errResp != nil {
 		cp.RespUserCh <- ResponseCreateUserArticle{SuccessOperation: SuccessOfTheOperation{
 			Success: false,
-			Message: ErrUserURL.Error(),
+			Message: ErrParseUserURL.Error(),
 			Status:  http.StatusNotFound,
 		}}
 		return

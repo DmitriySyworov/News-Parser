@@ -4,8 +4,8 @@ import (
 	"app/news-parser/internal/common"
 	"app/news-parser/internal/custom_errors"
 	"app/news-parser/internal/di"
+	"app/news-parser/internal/event_bus"
 	"app/news-parser/internal/response"
-	"app/news-parser/pkg/event_bus"
 	"log"
 	"net/http"
 	"time"
@@ -170,43 +170,43 @@ func (s *ServiceStat) PushInStat() {
 	for {
 		for event := range s.Subscriber() {
 			switch event.Name {
-			case common.EventClickCategory:
+			case event_bus.EventClickCategory:
 				category, ok := event.Data.(string)
 				if !ok {
 					log.Println("failed to assertion type category, got: ", category)
 				}
 				s.Repo.addClickCategory(category)
-			case common.EventClickArticle:
+			case event_bus.EventClickArticle:
 				url, ok := event.Data.(string)
 				if !ok {
 					log.Println("failed to assertion type article_default, got: ", url)
 				}
 				s.Repo.addClickArticle(url)
-			case common.EventCreateUserArticle:
+			case event_bus.EventCreateUserArticle:
 				statData, ok := event.Data.(common.StatDataUserArticle)
 				if !ok {
 					log.Println("failed to assertion type statUserData, got: ")
 				}
 				s.Repo.addCreateUserArticle(statData.Number, statData.UserUUID)
-			case common.EventUpdateUserArticle:
+			case event_bus.EventUpdateUserArticle:
 				statData, ok := event.Data.(common.StatDataUserArticle)
 				if !ok {
 					log.Println("failed to assertion type statUserData, got: ")
 				}
 				s.Repo.addUpdateUserArticle(statData.Number, statData.UserUUID)
-			case common.EventSoftDeleteUserArticle:
+			case event_bus.EventSoftDeleteUserArticle:
 				statData, ok := event.Data.(common.StatDataUserArticle)
 				if !ok {
 					log.Println("failed to assertion type statUserData, got: ")
 				}
 				s.Repo.addSoftDeleteUserArticle(statData.Number, statData.UserUUID)
-			case common.EventHardDeleteUserArticle:
+			case event_bus.EventHardDeleteUserArticle:
 				statData, ok := event.Data.(common.StatDataUserArticle)
 				if !ok {
 					log.Println("failed to assertion type statUserData, got: ")
 				}
 				s.Repo.addHardDeleteUserArticle(statData.Number, statData.UserUUID)
-			case common.EventRecoveryUserArticle:
+			case event_bus.EventRecoveryUserArticle:
 				statData, ok := event.Data.(common.StatDataUserArticle)
 				if !ok {
 					log.Println("failed to assertion type statUserData, got: ")
