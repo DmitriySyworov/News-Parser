@@ -23,7 +23,7 @@ type ServiceArticle struct {
 }
 type ServiceArticleDep struct {
 	*event_bus.EventBus
-	*parsing_helper.Browser
+	ResBrowser *parsing_helper.Browser
 	*loggers.Logger
 	di.IRepoStat
 }
@@ -102,15 +102,15 @@ func (s *ServiceArticle) GetArticleToday(idStr string) (*model.ArticleToday, *re
 	id, errParseId := strconv.Atoi(idStr)
 	if errParseId != nil {
 		return nil, &response.Error{
-			Message: custom_errors.ErrIncorrectArticleId.Error(),
+			Message: ErrIncorrectIDArticleToday.Error(),
 			Status:  http.StatusBadRequest,
 		}
 	}
 	article, errGetArticle := s.repo.GetArticleToday(id)
 	if errGetArticle != nil {
 		return nil, &response.Error{
-			Message: ErrLoadArticles.Error(),
-			Status:  http.StatusInternalServerError,
+			Message: ErrNotFoundArticle.Error(),
+			Status:  http.StatusNotFound,
 		}
 	}
 	go s.Publisher(&event_bus.Event{
@@ -146,11 +146,11 @@ func (s *ServiceArticle) GetArticlesInCategoryArchive(category, offsetStr, limit
 	if errGetArticlesArch != nil {
 		sliceError = append(sliceError, response.Error{
 			Message: errGetArticlesArch.Error(),
-			Status:  http.StatusUnauthorized,
+			Status:  http.StatusNotFound,
 		})
 		return nil, sliceError
 	}
-	var respCategoryArch []ResponseCategoryArchive //!!!!!
+	var respCategoryArch []ResponseCategoryArchive
 	for _, arch := range archiveArticles {
 		var tempArch ResponseCategoryArchive
 		tempArch.UUIDArticle = arch.ArticleArchiveUUID
@@ -262,15 +262,15 @@ func (s *ServiceArticle) saveDataRedis() {
 }
 
 func (s *ServiceArticle) loadNewInfo() {
-	var linksList = [1]string{
+	var linksList = [3]string{
 		`https://www.bbc.com/russian>politics>https://www.bbc.com>Время чтения:>Темы>articles>~`,
-		//`https://edition.cnn.com/sport>sport>https://edition.cnn.com>By>World>/\d\d\d\d/\d\d/\d\d/sport>Video`,
-		//`https://www.cnbc.com/business/>business>https://www.cnbc.com>In this article>Choose CNBC as your preferred source on Google and never miss a moment from the most trusted name in business news.>/\d\d\d\d/\d\d/\d\d/>~`,
+		`https://edition.cnn.com/sport>sport>https://edition.cnn.com>By>World>/\d\d\d\d/\d\d/\d\d/sport>Video`,
+		`https://www.cnbc.com/business/>business>https://www.cnbc.com>In this article>Choose CNBC as your preferred source on Google and never miss a moment from the most trusted name in business news.>/\d\d\d\d/\d\d/\d\d/>~`,
 	}
 	var wg sync.WaitGroup
 	for _, list := range linksList {
 		data := strings.Split(list, ">")
-		parse := NewParsing(&wg, s.repo, s.Browser, s.Logger)
+		parse := NewParsing(&wg, s.repo, s.ServiceArticleDep.ResBrowser, s.Logger)
 		wg.Add(3)
 		go func(url, category, domain, flagText, isArticleOnHeader string) {
 			defer wg.Done()

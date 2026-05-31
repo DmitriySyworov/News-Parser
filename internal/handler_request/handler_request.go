@@ -26,7 +26,7 @@ func HandlerRequest[T any](request *http.Request) (*T, error) {
 	}
 	errValidate := validator.New().Struct(payload)
 	if errValidate != nil {
-		return nil, errValidate
+		return &payload, errValidate
 	}
 	return &payload, nil
 }

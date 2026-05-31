@@ -1,0 +1,855 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Service designed for automatic news parsing",
+        "title": "News-Parser",
+        "contact": {},
+        "version": "1.0"
+    },
+    "paths": {
+        "/api/v1/article/archive/text/{uuid}": {
+            "get": {
+                "description": "get one archive article",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "article_default"
+                ],
+                "summary": "get archive article",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "uuid  archive article must be 36 characters",
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/app_news-parser_internal_model.ArticleArchive"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "validation errors:\" | `uuid` - article_uuid must be 36 characters long",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_articles` - article not found",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/article/archive/{category}": {
+            "get": {
+                "description": "get archive articles by category",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "article_default"
+                ],
+                "summary": "get archive articles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "food, politics, sport, cloth, electronics, the following categories are valid, as well as all to get all entries",
+                        "name": "category",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset default 0",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit default 50",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "date must be YYYY-MM-DD",
+                        "name": "date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/internal_article_default.ResponseCategoryArchive"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "validation errors:\" | `offset` - the offset must be a positive integer | `limit` - the limit must be a positive integer | `category` - this category of articles does not exist | `date` - the date format must be YYYY-MM-DD",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_articles` - article not found",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/article/today/text/{id}": {
+            "get": {
+                "description": "get one today article with text",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "article_default"
+                ],
+                "summary": "get article with text",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "id of today's article must be 7 digits",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/app_news-parser_internal_model.ArticleToday"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "validation errors:\" | `id` - id must be 7 digits long",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_articles` - article not found",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/article/today/{category}": {
+            "get": {
+                "description": "get today's articles by category",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "article_default"
+                ],
+                "summary": "get today articles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "food, politics, sport, cloth, electronics, the following categories are valid, as well as all to get all entries",
+                        "name": "category",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset default 0",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit default 50",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "is_articles default true",
+                        "name": "is_articles",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "with_text default false",
+                        "name": "with_text",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/internal_article_default.ResponseCategoryToday"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "validation errors:\" | `is_articles` - the isArticles must be a boolean is true or false | `with_text` - the withText must be a boolean is true or false | `offset` - the offset must be a positive integer | `limit` - the limit must be a positive integer | `category` - this category of articles does not exist",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_articles` - article not found",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/my/stat/article": {
+            "get": {
+                "description": "get stat actions user by date",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stat"
+                ],
+                "summary": "get stat user by date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "date must be YYYY-MM-DD",
+                        "name": "date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "JWT storing user_uuid",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_stat.ResponseUserArticleStat"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "validation errors:\" | `date` - the date format must be YYYY-MM-DD",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized error:\" | `token` - incorrect token",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_statistic` - statistic not found or empty | `not_found_user` - such user does not exist",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/my/stat/article/alltime": {
+            "get": {
+                "description": "get stat actions user all-time",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stat"
+                ],
+                "summary": "get stat user all time",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "JWT storing user_uuid",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_stat.ResponseUserArticleAllTimeStat"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized error:\" | `token` - incorrect token",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_statistic` - statistic not found or empty | `not_found_user` - such user does not exist",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/stat/article": {
+            "get": {
+                "description": "get stat popular articles  by date",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stat"
+                ],
+                "summary": "get stat articles  by date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "date must be YYYY-MM-DD",
+                        "name": "date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_stat.ResponseStatArticleDate"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "validation errors:\" | `date` - the date format must be YYYY-MM-DD",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_statistic` - statistic not found or empty",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/stat/article/alltime": {
+            "get": {
+                "description": "get stat popular articles  all-time",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stat"
+                ],
+                "summary": "get stat articles all time",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_stat.ResponseStatArticleAll"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_statistic` - statistic not found or empty",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/stat/article/category": {
+            "get": {
+                "description": "get stat popular categories  by date",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stat"
+                ],
+                "summary": "get stat categories  by date",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "date must be YYYY-MM-D'",
+                        "name": "date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_stat.ResponseStatCategoryDate"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "validation errors:\" | `date` - the date format must be YYYY-MM-DD",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_statistic` - statistic not found or empty",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/stat/article/category/alltime": {
+            "get": {
+                "description": "get stat popular categories all-time",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stat"
+                ],
+                "summary": "get stat categories all time",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_stat.ResponseStatCategoryAll"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "not found:\" | `not_found_statistic` - statistic not found or empty",
+                        "schema": {
+                            "$ref": "#/definitions/app_news-parser_internal_response.Response"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "app_news-parser_internal_model.ArticleArchive": {
+            "type": "object",
+            "properties": {
+                "articleArchiveUUID": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "header": {
+                    "type": "string"
+                },
+                "isArticle": {
+                    "type": "boolean"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "app_news-parser_internal_model.ArticleToday": {
+            "type": "object",
+            "properties": {
+                "articleID": {
+                    "type": "integer"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "header": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "app_news-parser_internal_model.UserArticleStat": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "hardDeleted": {
+                    "type": "integer"
+                },
+                "recovered": {
+                    "type": "integer"
+                },
+                "softDeleted": {
+                    "type": "integer"
+                },
+                "updated": {
+                    "type": "integer"
+                },
+                "userUUID": {
+                    "type": "string"
+                }
+            }
+        },
+        "app_news-parser_internal_response.Error": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "app_news-parser_internal_response.Response": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/app_news-parser_internal_response.Error"
+                    }
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_article_default.ResponseCategoryArchive": {
+            "type": "object",
+            "properties": {
+                "header": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "uuidarticle": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_article_default.ResponseCategoryToday": {
+            "type": "object",
+            "properties": {
+                "header": {
+                    "type": "string"
+                },
+                "idarticle": {
+                    "type": "integer"
+                },
+                "isArticle": {
+                    "type": "boolean"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_stat.ArticleDbAll": {
+            "type": "object",
+            "properties": {
+                "place": {
+                    "type": "integer"
+                },
+                "sumClick": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_stat.ArticleDbDate": {
+            "type": "object",
+            "properties": {
+                "click": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "place": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_stat.CategoryDbAll": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "place": {
+                    "type": "integer"
+                },
+                "sumClick": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_stat.CategoryDbDate": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "click": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "place": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_stat.ResponseStatArticleAll": {
+            "type": "object",
+            "properties": {
+                "articles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_stat.ArticleDbAll"
+                    }
+                }
+            }
+        },
+        "internal_stat.ResponseStatArticleDate": {
+            "type": "object",
+            "properties": {
+                "articles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_stat.ArticleDbDate"
+                    }
+                }
+            }
+        },
+        "internal_stat.ResponseStatCategoryAll": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_stat.CategoryDbAll"
+                    }
+                }
+            }
+        },
+        "internal_stat.ResponseStatCategoryDate": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_stat.CategoryDbDate"
+                    }
+                }
+            }
+        },
+        "internal_stat.ResponseUserArticleAllTimeStat": {
+            "type": "object",
+            "properties": {
+                "nowExist": {
+                    "type": "integer"
+                },
+                "user-article-statistic-all-time": {
+                    "$ref": "#/definitions/internal_stat.UserArticleAllTimeStat"
+                }
+            }
+        },
+        "internal_stat.ResponseUserArticleStat": {
+            "type": "object",
+            "properties": {
+                "nowExist": {
+                    "type": "integer"
+                },
+                "user-article-statistic": {
+                    "$ref": "#/definitions/app_news-parser_internal_model.UserArticleStat"
+                }
+            }
+        },
+        "internal_stat.UserArticleAllTimeStat": {
+            "type": "object",
+            "properties": {
+                "allTimeCreated": {
+                    "type": "integer"
+                },
+                "allTimeHardDeleted": {
+                    "type": "integer"
+                },
+                "allTimeRecovered": {
+                    "type": "integer"
+                },
+                "allTimeSoftDeleted": {
+                    "type": "integer"
+                },
+                "allTimeUpdated": {
+                    "type": "integer"
+                }
+            }
+        }
+    }
+}

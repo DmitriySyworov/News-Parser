@@ -13,7 +13,7 @@ import (
 )
 
 type HandlerArticleUser struct {
-	response.Response[any]
+	response.Response
 	Dep     *HandlerArticleUserDep
 	Service *ServiceArticleUser
 }
@@ -41,7 +41,7 @@ func NewHandlerArticleUser(router *http.ServeMux, service *ServiceArticleUser, d
 func (h *HandlerArticleUser) CreateUserArticles() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -70,17 +70,17 @@ func (h *HandlerArticleUser) CreateUserArticles() http.HandlerFunc {
 							Message: ErrIncorrectURL.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["url"] = body.URL
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					} else if errList.Field() == "Category" {
 						err := response.Error{
 							Message: ErrIncorrectCategory.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["category"] = body.Category
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					}
 				}
 			} else {
@@ -90,8 +90,8 @@ func (h *HandlerArticleUser) CreateUserArticles() http.HandlerFunc {
 				}
 				values.DataLog.Errors = append(values.DataLog.Errors, err)
 				h.Response.Errors = append(h.Response.Errors, err)
-				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
 		}
 		sliceUserArticles, errCreateUserArt := h.Service.CreateUserArticles(body, values.UserUUID, addText)
@@ -113,7 +113,7 @@ func (h *HandlerArticleUser) CreateUserArticles() http.HandlerFunc {
 func (h *HandlerArticleUser) UpdateUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -146,9 +146,9 @@ func (h *HandlerArticleUser) UpdateUserArticle() http.HandlerFunc {
 							Message: ErrIncorrectCategory.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["category"] = body.Category
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					}
 				}
 			} else {
@@ -158,8 +158,8 @@ func (h *HandlerArticleUser) UpdateUserArticle() http.HandlerFunc {
 				}
 				values.DataLog.Errors = append(values.DataLog.Errors, err)
 				h.Response.Errors = append(h.Response.Errors, err)
-				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
 		}
 		updateArticle, errSliceUpdate := h.Service.UpdateUserArticle(body.Category, values.UserUUID, articleUUID, addText, deleteText)
@@ -182,7 +182,7 @@ func (h *HandlerArticleUser) UpdateUserArticle() http.HandlerFunc {
 func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -213,17 +213,17 @@ func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 							Message: ErrIncorrectCategory.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["category"] = body.Category
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					} else if errList.Field() == "Domain" {
 						err := response.Error{
 							Message: ErrIncorrectDomain.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["domain"] = body.Domain
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					}
 				}
 			} else {
@@ -233,7 +233,6 @@ func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 				}
 				values.DataLog.Errors = append(values.DataLog.Errors, err)
 				h.Response.Errors = append(h.Response.Errors, err)
-				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
 			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
@@ -257,7 +256,7 @@ func (h *HandlerArticleUser) UpdateBatchUserArticles() http.HandlerFunc {
 func (h *HandlerArticleUser) GetUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -296,7 +295,7 @@ func (h *HandlerArticleUser) GetUserArticle() http.HandlerFunc {
 func (h *HandlerArticleUser) GetAllUserArticles() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -341,7 +340,7 @@ func (h *HandlerArticleUser) GetAllUserArticles() http.HandlerFunc {
 func (h *HandlerArticleUser) RemoveUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -381,7 +380,7 @@ func (h *HandlerArticleUser) RemoveUserArticle() http.HandlerFunc {
 func (h *HandlerArticleUser) RemoveAllUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -418,7 +417,7 @@ func (h *HandlerArticleUser) RemoveAllUserArticle() http.HandlerFunc {
 func (h *HandlerArticleUser) GetRemoveUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -459,7 +458,7 @@ func (h *HandlerArticleUser) GetRemoveUserArticle() http.HandlerFunc {
 func (h *HandlerArticleUser) RecoveryUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -498,7 +497,7 @@ func (h *HandlerArticleUser) RecoveryUserArticle() http.HandlerFunc {
 func (h *HandlerArticleUser) RecoveryAllUserArticle() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
