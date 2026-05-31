@@ -52,7 +52,7 @@ func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []response.Er
 	}
 	if offset < 0 {
 		sliceError = append(sliceError, response.Error{
-			Message: custom_errors.ErrNegativeOffset.Error(),
+			Message: custom_errors.ErrIncorrectOffset.Error(),
 			Status:  http.StatusBadRequest,
 		})
 	}
@@ -69,7 +69,7 @@ func ValidateOffsetAndLimit(offsetStr, limitStr string) (int, int, []response.Er
 	}
 	if limit < 0 {
 		sliceError = append(sliceError, response.Error{
-			Message: custom_errors.ErrNegativeLimit.Error(),
+			Message: custom_errors.ErrIncorrectLimit.Error(),
 			Status:  http.StatusBadRequest,
 		})
 	}

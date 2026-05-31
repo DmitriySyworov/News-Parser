@@ -15,8 +15,15 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+
+	"app/news-parser/docs"
+
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
+// @title           News-Parser
+// @version         1.0
+// @description     Service designed for automatic news parsing
 func main() {
 	//
 	logger := loggers.NewLogger()
@@ -42,7 +49,7 @@ func main() {
 	//
 	serviceAuth := auth.NewServiceAuth(repoAuth, &auth.ServiceAuthDep{IRepoUser: repoUser, Configs: conf})
 	serviceUser := user.NewServiceUser(repoUser, &user.ServiceUserDep{Configs: conf})
-	serviceArticle := article_default.NewServiceArticle(repoArticle, &article_default.ServiceArticleDep{IRepoStat: repoStat, EventBus: eventBus, Browser: browser, Logger: logger})
+	serviceArticle := article_default.NewServiceArticle(repoArticle, &article_default.ServiceArticleDep{IRepoStat: repoStat, EventBus: eventBus, ResBrowser: browser, Logger: logger})
 	serviceStat := stat.NewServiceStat(repoStat, &stat.ServiceStatDep{IRepoUser: repoUser, EventBus: eventBus})
 	serviceArticleUser := article_user.NewServiceArticleUser(repoArticleUser, &article_user.ServiceArticleUserDep{IRepoUser: repoUser, EventBus: eventBus})
 	//
@@ -51,6 +58,8 @@ func main() {
 	go serviceArticleUser.DeletingRemoveUserArticle()
 	go serviceUser.DeletingRemoveUser()
 	//
+	docs.SwaggerInfo.Host = "localhost:" + conf.ApiPort
+	router.Handle("GET /swagger/{any...}", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 	auth.NewHandlerAuth(router, serviceAuth, &auth.HandlerAuthDep{ManagerMiddleware: managerMv, Logger: logger})
 	user.NewHandlerUser(router, serviceUser, &user.HandlerUserDep{ManagerMiddleware: managerMv, Logger: logger})
 	article_default.NewHandlerArticle(router, serviceArticle, &article_default.HandlerArticleDep{Logger: logger})

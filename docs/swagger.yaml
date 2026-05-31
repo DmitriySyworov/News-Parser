@@ -1,0 +1,547 @@
+definitions:
+  app_news-parser_internal_model.ArticleArchive:
+    properties:
+      articleArchiveUUID:
+        type: string
+      category:
+        type: string
+      date:
+        type: string
+      header:
+        type: string
+      isArticle:
+        type: boolean
+      text:
+        type: string
+      url:
+        type: string
+    type: object
+  app_news-parser_internal_model.ArticleToday:
+    properties:
+      articleID:
+        type: integer
+      category:
+        type: string
+      header:
+        type: string
+      text:
+        type: string
+      url:
+        type: string
+    type: object
+  app_news-parser_internal_model.UserArticleStat:
+    properties:
+      created:
+        type: integer
+      date:
+        type: string
+      hardDeleted:
+        type: integer
+      recovered:
+        type: integer
+      softDeleted:
+        type: integer
+      updated:
+        type: integer
+      userUUID:
+        type: string
+    type: object
+  app_news-parser_internal_response.Error:
+    properties:
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
+  app_news-parser_internal_response.Response:
+    properties:
+      data: {}
+      errors:
+        items:
+          $ref: '#/definitions/app_news-parser_internal_response.Error'
+        type: array
+      success:
+        type: boolean
+    type: object
+  internal_article_default.ResponseCategoryArchive:
+    properties:
+      header:
+        type: string
+      url:
+        type: string
+      uuidarticle:
+        type: string
+    type: object
+  internal_article_default.ResponseCategoryToday:
+    properties:
+      header:
+        type: string
+      idarticle:
+        type: integer
+      isArticle:
+        type: boolean
+      text:
+        type: string
+      url:
+        type: string
+    type: object
+  internal_stat.ArticleDbAll:
+    properties:
+      place:
+        type: integer
+      sumClick:
+        type: integer
+      url:
+        type: string
+    type: object
+  internal_stat.ArticleDbDate:
+    properties:
+      click:
+        type: integer
+      date:
+        type: string
+      place:
+        type: integer
+      url:
+        type: string
+    type: object
+  internal_stat.CategoryDbAll:
+    properties:
+      category:
+        type: string
+      place:
+        type: integer
+      sumClick:
+        type: integer
+    type: object
+  internal_stat.CategoryDbDate:
+    properties:
+      category:
+        type: string
+      click:
+        type: integer
+      date:
+        type: string
+      place:
+        type: integer
+    type: object
+  internal_stat.ResponseStatArticleAll:
+    properties:
+      articles:
+        items:
+          $ref: '#/definitions/internal_stat.ArticleDbAll'
+        type: array
+    type: object
+  internal_stat.ResponseStatArticleDate:
+    properties:
+      articles:
+        items:
+          $ref: '#/definitions/internal_stat.ArticleDbDate'
+        type: array
+    type: object
+  internal_stat.ResponseStatCategoryAll:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/internal_stat.CategoryDbAll'
+        type: array
+    type: object
+  internal_stat.ResponseStatCategoryDate:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/internal_stat.CategoryDbDate'
+        type: array
+    type: object
+  internal_stat.ResponseUserArticleAllTimeStat:
+    properties:
+      nowExist:
+        type: integer
+      user-article-statistic-all-time:
+        $ref: '#/definitions/internal_stat.UserArticleAllTimeStat'
+    type: object
+  internal_stat.ResponseUserArticleStat:
+    properties:
+      nowExist:
+        type: integer
+      user-article-statistic:
+        $ref: '#/definitions/app_news-parser_internal_model.UserArticleStat'
+    type: object
+  internal_stat.UserArticleAllTimeStat:
+    properties:
+      allTimeCreated:
+        type: integer
+      allTimeHardDeleted:
+        type: integer
+      allTimeRecovered:
+        type: integer
+      allTimeSoftDeleted:
+        type: integer
+      allTimeUpdated:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: Service designed for automatic news parsing
+  title: News-Parser
+  version: "1.0"
+paths:
+  /api/v1/article/archive/{category}:
+    get:
+      description: get archive articles by category
+      parameters:
+      - description: food, politics, sport, cloth, electronics, the following categories
+          are valid, as well as all to get all entries
+        in: path
+        name: category
+        required: true
+        type: string
+      - description: offset default 0
+        in: query
+        name: offset
+        type: integer
+      - description: limit default 50
+        in: query
+        name: limit
+        type: integer
+      - description: date must be YYYY-MM-DD
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/internal_article_default.ResponseCategoryArchive'
+                  type: array
+              type: object
+        "400":
+          description: validation errors:" | `offset` - the offset must be a positive
+            integer | `limit` - the limit must be a positive integer | `category`
+            - this category of articles does not exist | `date` - the date format
+            must be YYYY-MM-DD
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_articles` - article not found
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get archive articles
+      tags:
+      - article_default
+  /api/v1/article/archive/text/{uuid}:
+    get:
+      description: get one archive article
+      parameters:
+      - description: uuid  archive article must be 36 characters
+        in: path
+        name: uuid
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/app_news-parser_internal_model.ArticleArchive'
+              type: object
+        "400":
+          description: validation errors:" | `uuid` - article_uuid must be 36 characters
+            long
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_articles` - article not found
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get archive article
+      tags:
+      - article_default
+  /api/v1/article/today/{category}:
+    get:
+      description: get today's articles by category
+      parameters:
+      - description: food, politics, sport, cloth, electronics, the following categories
+          are valid, as well as all to get all entries
+        in: path
+        name: category
+        required: true
+        type: string
+      - description: offset default 0
+        in: query
+        name: offset
+        type: integer
+      - description: limit default 50
+        in: query
+        name: limit
+        type: integer
+      - description: is_articles default true
+        in: query
+        name: is_articles
+        type: boolean
+      - description: with_text default false
+        in: query
+        name: with_text
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/internal_article_default.ResponseCategoryToday'
+                  type: array
+              type: object
+        "400":
+          description: validation errors:" | `is_articles` - the isArticles must be
+            a boolean is true or false | `with_text` - the withText must be a boolean
+            is true or false | `offset` - the offset must be a positive integer |
+            `limit` - the limit must be a positive integer | `category` - this category
+            of articles does not exist
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_articles` - article not found
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get today articles
+      tags:
+      - article_default
+  /api/v1/article/today/text/{id}:
+    get:
+      description: get one today article with text
+      parameters:
+      - description: id of today's article must be 7 digits
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/app_news-parser_internal_model.ArticleToday'
+              type: object
+        "400":
+          description: validation errors:" | `id` - id must be 7 digits long
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_articles` - article not found
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get article with text
+      tags:
+      - article_default
+  /api/v1/my/stat/article:
+    get:
+      description: get stat actions user by date
+      parameters:
+      - description: date must be YYYY-MM-DD
+        in: query
+        name: date
+        required: true
+        type: string
+      - description: JWT storing user_uuid
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_stat.ResponseUserArticleStat'
+              type: object
+        "400":
+          description: validation errors:" | `date` - the date format must be YYYY-MM-DD
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "401":
+          description: unauthorized error:" | `token` - incorrect token
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_statistic` - statistic not found or
+            empty | `not_found_user` - such user does not exist
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get stat user by date
+      tags:
+      - stat
+  /api/v1/my/stat/article/alltime:
+    get:
+      description: get stat actions user all-time
+      parameters:
+      - description: JWT storing user_uuid
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_stat.ResponseUserArticleAllTimeStat'
+              type: object
+        "401":
+          description: unauthorized error:" | `token` - incorrect token
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_statistic` - statistic not found or
+            empty | `not_found_user` - such user does not exist
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get stat user all time
+      tags:
+      - stat
+  /api/v1/stat/article:
+    get:
+      description: get stat popular articles  by date
+      parameters:
+      - description: date must be YYYY-MM-DD
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_stat.ResponseStatArticleDate'
+              type: object
+        "400":
+          description: validation errors:" | `date` - the date format must be YYYY-MM-DD
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_statistic` - statistic not found or
+            empty
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get stat articles  by date
+      tags:
+      - stat
+  /api/v1/stat/article/alltime:
+    get:
+      description: get stat popular articles  all-time
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_stat.ResponseStatArticleAll'
+              type: object
+        "404":
+          description: not found:" | `not_found_statistic` - statistic not found or
+            empty
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get stat articles all time
+      tags:
+      - stat
+  /api/v1/stat/article/category:
+    get:
+      description: get stat popular categories  by date
+      parameters:
+      - description: date must be YYYY-MM-D'
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_stat.ResponseStatCategoryDate'
+              type: object
+        "400":
+          description: validation errors:" | `date` - the date format must be YYYY-MM-DD
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+        "404":
+          description: not found:" | `not_found_statistic` - statistic not found or
+            empty
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get stat categories  by date
+      tags:
+      - stat
+  /api/v1/stat/article/category/alltime:
+    get:
+      description: get stat popular categories all-time
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app_news-parser_internal_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_stat.ResponseStatCategoryAll'
+              type: object
+        "404":
+          description: not found:" | `not_found_statistic` - statistic not found or
+            empty
+          schema:
+            $ref: '#/definitions/app_news-parser_internal_response.Response'
+      summary: get stat categories all time
+      tags:
+      - stat
+swagger: "2.0"

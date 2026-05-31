@@ -14,7 +14,7 @@ import (
 )
 
 type HandlerUser struct {
-	response.Response[any]
+	response.Response
 	Dep *HandlerUserDep
 	*ServiceUser
 }
@@ -36,7 +36,7 @@ func NewHandlerUser(router *http.ServeMux, service *ServiceUser, dep *HandlerUse
 func (h *HandlerUser) GetMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -73,7 +73,7 @@ func (h *HandlerUser) GetMyUser() http.HandlerFunc {
 func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -102,7 +102,6 @@ func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 						}
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					}
 				}
 			} else {
@@ -112,8 +111,8 @@ func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 				}
 				values.DataLog.Errors = append(values.DataLog.Errors, err)
 				h.Response.Errors = append(h.Response.Errors, err)
-				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
 		}
 		typeRemove := request.URL.Query().Get("type")
@@ -145,7 +144,7 @@ func (h *HandlerUser) RemoveMyUser() http.HandlerFunc {
 func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -174,7 +173,6 @@ func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 						}
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					} else if errList.Field() == "NewPassword" {
 						err := response.Error{
 							Message: custom_errors.ErrIncorrectNewPassword.Error(),
@@ -182,23 +180,22 @@ func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 						}
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					} else if errList.Field() == "Name" {
 						err := response.Error{
 							Message: custom_errors.ErrIncorrectName.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["name"] = body.Name
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					} else if errList.Field() == "NewEmail" {
 						err := response.Error{
 							Message: custom_errors.ErrIncorrectEmail.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["new_email"] = body.NewEmail
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					}
 				}
 			} else {
@@ -208,8 +205,8 @@ func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 				}
 				values.DataLog.Errors = append(values.DataLog.Errors, err)
 				h.Response.Errors = append(h.Response.Errors, err)
-				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
 		}
 		updateUser, respAuth, errUpdate := h.ServiceUser.UpdateMyUser(body, values.UserUUID)
@@ -237,7 +234,7 @@ func (h *HandlerUser) UpdateMyUser() http.HandlerFunc {
 func (h *HandlerUser) ConfirmMyUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			h.Response = response.Response[any]{}
+			h.Response = response.Response{}
 		}()
 		ctxValues := request.Context().Value(middleware.KeyContextValues)
 		values, ok := ctxValues.(*middleware.ContextValues)
@@ -264,9 +261,9 @@ func (h *HandlerUser) ConfirmMyUser() http.HandlerFunc {
 							Message: custom_errors.ErrIncorrectCode.Error(),
 							Status:  http.StatusBadRequest,
 						}
+						values.DataLog.MapLog["code"] = body.Code
 						values.DataLog.Errors = append(values.DataLog.Errors, err)
 						h.Response.Errors = append(h.Response.Errors, err)
-						response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 					}
 				}
 			} else {
@@ -276,8 +273,8 @@ func (h *HandlerUser) ConfirmMyUser() http.HandlerFunc {
 				}
 				values.DataLog.Errors = append(values.DataLog.Errors, err)
 				h.Response.Errors = append(h.Response.Errors, err)
-				response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			}
+			response.HandlerResponse(writer, h.Response, http.StatusBadRequest)
 			return
 		}
 		action := request.URL.Query().Get("action")

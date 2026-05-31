@@ -2,6 +2,7 @@ package parsing_helper
 
 import (
 	"app/news-parser/internal/loggers"
+	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
@@ -13,9 +14,9 @@ import (
 )
 
 type Browser struct {
-	Logger *loggers.Logger
-	*rod.Browser
-	bin string
+	Logger     *loggers.Logger
+	ResBrowser *rod.Browser
+	bin        string
 }
 
 func NewBrowser(rodBin string, logger *loggers.Logger) *Browser {
@@ -30,14 +31,16 @@ func NewBrowser(rodBin string, logger *loggers.Logger) *Browser {
 	}
 	browser := rod.New().ControlURL(path).MustConnect()
 	return &Browser{
-		Logger:  logger,
-		Browser: browser,
+		Logger:     logger,
+		ResBrowser: browser,
+		bin:        rodBin,
 	}
 }
 func (b *Browser) RecoveryBrowser() {
-	if errClose := b.Browser.Close(); errClose != nil {
+	if errClose := b.ResBrowser.Close(); errClose != nil {
 		b.Logger.SystemLogger(slog.LevelError, "failed to close crashed browser")
 	}
+	fmt.Println("recover")
 	b.Logger.SystemLogger(slog.LevelWarn, "recovery launcher")
 	path, errLaunch := launcher.New().
 		NoSandbox(true).
@@ -48,7 +51,7 @@ func (b *Browser) RecoveryBrowser() {
 		b.Logger.SystemLogger(slog.LevelError, "failed to start recovery launcher")
 		return
 	}
-	b.Browser = rod.New().ControlURL(path).MustConnect()
+	b.ResBrowser = rod.New().ControlURL(path).MustConnect()
 }
 
 func SendRequest(url string) (*http.Response, error) {

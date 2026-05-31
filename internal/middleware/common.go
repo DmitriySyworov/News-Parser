@@ -7,14 +7,14 @@ import (
 
 type ManagerMiddleware struct {
 	Signature string
-	resp      response.Response[any]
+	resp      response.Response
 	*ContextValues
-	Logger *loggers.Logger
+	Logger loggers.Logger
 }
 type ContextValues struct {
 	SessionID string
 	UserUUID  string
-	DataLog   *loggers.DataLog
+	DataLog   loggers.DataLog
 }
 
 const (
@@ -24,9 +24,9 @@ const (
 func NewManagerMiddleware(signature string, logger *loggers.Logger) *ManagerMiddleware {
 	return &ManagerMiddleware{
 		Signature: signature,
-		Logger:    logger,
+		Logger:    *logger,
 		ContextValues: &ContextValues{
-			DataLog: logger.DataLog,
+			DataLog: *logger.DataLog,
 		},
 	}
 }

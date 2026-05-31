@@ -5,9 +5,9 @@ import (
 	"net/http"
 )
 
-type Response[T any] struct {
+type Response struct {
 	Success bool
-	Data    T
+	Data    any
 	Errors  []Error
 }
 type Error struct {
@@ -15,7 +15,7 @@ type Error struct {
 	Status  int
 }
 
-func HandlerResponse(writer http.ResponseWriter, resp Response[any], status int) {
+func HandlerResponse(writer http.ResponseWriter, resp Response, status int) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(status)
 	errEncode := json.NewEncoder(writer).Encode(resp)

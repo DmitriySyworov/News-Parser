@@ -59,5 +59,7 @@ func (l *Logger) SystemLogger(level slog.Level, msg string) {
 		l.Info(msg)
 	case slog.LevelError:
 		l.Error(msg)
+	case slog.LevelWarn:
+		l.Warn(msg)
 	}
 }

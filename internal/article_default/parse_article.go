@@ -5,7 +5,6 @@ import (
 	"app/news-parser/internal/loggers"
 	"app/news-parser/internal/parsing_helper"
 	"errors"
-	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -27,7 +26,7 @@ type Parse struct {
 	LinkCh    chan ArticlesGoroutines
 	ArticleCh chan ArticlesGoroutines
 	IsOk      chan bool
-	Browser   *parsing_helper.Browser
+	Browse    *parsing_helper.Browser
 	WG        *sync.WaitGroup
 	Repo      *RepositoryArticle
 	Logger    loggers.Logger
@@ -38,7 +37,7 @@ func NewParsing(wg *sync.WaitGroup, repo *RepositoryArticle, browser *parsing_he
 		LinkCh:    make(chan ArticlesGoroutines, 10),
 		ArticleCh: make(chan ArticlesGoroutines, 10),
 		IsOk:      make(chan bool, 10),
-		Browser:   browser,
+		Browse:    browser,
 		WG:        wg,
 		Repo:      repo,
 	}
@@ -52,7 +51,7 @@ func (p *Parse) parseCategory(url, category, domain, flagText, isArticleOnHeader
 	}
 	defer func() {
 		if errClose := response.Body.Close(); errClose != nil {
-			fmt.Println(errClose)
+			p.Logger.SystemLogger(slog.LevelWarn, "failed to close open link")
 		}
 		p.recoveryGoroutine(false)
 	}()
@@ -62,7 +61,6 @@ func (p *Parse) parseCategory(url, category, domain, flagText, isArticleOnHeader
 		return
 	}
 	doc.Find("a").Each(func(index int, element *goquery.Selection) {
-		defer p.recoveryGoroutine(false)
 		var article ArticlesGoroutines
 		article.Category = category
 		linkHeader := element.Text()
@@ -97,8 +95,9 @@ func (p *Parse) parseArticle(domain, startWord, stopWord string) {
 		go func() {
 			defer p.recoveryGoroutine(true)
 			if strings.Contains(art.Url, domain) && art.IsArticle {
-				page := p.Browser.MustPage(art.Url)
-				page.Timeout(10 * time.Second).MustWaitLoad()
+				wrapperBrowser := p.Browse.ResBrowser
+				page := wrapperBrowser.MustPage(art.Url)
+				page.MustWaitLoad()
 				text, err := page.MustElement("body").Text()
 				if err != nil {
 					p.Logger.SystemLogger(slog.LevelInfo, "page parsing error")
@@ -167,7 +166,7 @@ func (p *Parse) recoveryGoroutine(isPanicBrowser bool) {
 	if errPanic := recover(); errPanic != nil {
 		p.Logger.SystemLogger(slog.LevelWarn, "critical error while parsing links")
 		if isPanicBrowser {
-			p.Browser.RecoveryBrowser()
+			p.Browse.RecoveryBrowser()
 		}
 		p.ArticleCh <- ArticlesGoroutines{Error: errors.New("critical error while parsing links")}
 	}

@@ -23,7 +23,7 @@ func helperValidateToken(header string) (string, error) {
 func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			m.resp = response.Response[any]{}
+			m.resp = response.Response{}
 		}()
 		header := request.Header.Get("X-Temp-Token")
 		token, errToken := helperValidateToken(header)
@@ -57,7 +57,7 @@ func (m *ManagerMiddleware) IsTemporaryJWT(next http.Handler) http.Handler {
 func (m *ManagerMiddleware) IsAuthJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		defer func() {
-			m.resp = response.Response[any]{}
+			m.resp = response.Response{}
 		}()
 		header := request.Header.Get("Authorization")
 		token, errToken := helperValidateToken(header)

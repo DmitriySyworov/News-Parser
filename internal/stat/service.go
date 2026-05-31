@@ -30,7 +30,7 @@ func (s *ServiceStat) GetStatCategoryByDate(dateStr string) (*ResponseStatCatego
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
 		return nil, &response.Error{
-			Message: ErrIncorrectDate.Error(),
+			Message: custom_errors.ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		}
 	}
@@ -78,7 +78,7 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
 		return nil, &response.Error{
-			Message: ErrIncorrectDate.Error(),
+			Message: custom_errors.ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		}
 	}
@@ -122,7 +122,7 @@ func (s *ServiceStat) GetStatArticleByDate(dateStr string) (*ResponseStatArticle
 		return statCategories, nil
 	}
 }
-func (s *ServiceStat) GetUserArticleStat(userUUID, dateStr string) (*ResponseUserArticleStat, []response.Error) {
+func (s *ServiceStat) GetUserArticleStatByDate(userUUID, dateStr string) (*ResponseUserArticleStat, []response.Error) {
 	var sliceError []response.Error
 	if !s.IRepoUser.IsUserExistByUUID(userUUID) {
 		sliceError = append(sliceError, response.Error{
@@ -133,7 +133,7 @@ func (s *ServiceStat) GetUserArticleStat(userUUID, dateStr string) (*ResponseUse
 	date, errParse := time.Parse(time.DateOnly, dateStr)
 	if errParse != nil {
 		sliceError = append(sliceError, response.Error{
-			Message: ErrIncorrectDate.Error(),
+			Message: custom_errors.ErrIncorrectDate.Error(),
 			Status:  http.StatusBadRequest,
 		})
 	}
